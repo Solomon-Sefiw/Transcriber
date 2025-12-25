@@ -1,5 +1,16 @@
 
 import React, { useState } from 'react';
+import { 
+  Box, Paper, Typography, Grid, TextField, Button, 
+  IconButton, Stack, CircularProgress, Alert, Tooltip 
+} from '@mui/material';
+import { 
+  CloudUpload as UploadIcon,
+  AutoFixHigh as EditIcon,
+  PlayCircle as PlayIcon,
+  Visibility as AnalyzeIcon,
+  Collections as LibraryIcon
+} from '@mui/icons-material';
 import { editImage, generateVeoVideo, analyzeVideo } from '../services/geminiService';
 
 const ImageVideoStudio: React.FC = () => {
@@ -58,100 +69,144 @@ const ImageVideoStudio: React.FC = () => {
   const isVideo = rawFile?.type.startsWith('video/');
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div className="lg:col-span-5 space-y-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Media Source</h2>
-          <div className="relative group">
-            <input type="file" onChange={handleUpload} accept="image/*,video/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-            <div className={`aspect-video rounded-xl border-2 border-dashed flex flex-col items-center justify-center transition-all ${media ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
+    <Grid container spacing={4}>
+      <Grid item xs={12} lg={5}>
+        <Paper elevation={0} sx={{ p: 4, border: 1, borderColor: 'divider', borderRadius: 4 }}>
+          <Typography variant="h6" fontWeight="bold" gutterBottom>Media Source</Typography>
+          
+          <Box sx={{ position: 'relative', mb: 4 }}>
+            <input 
+              type="file" 
+              onChange={handleUpload} 
+              accept="image/*,video/*" 
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10 }} 
+            />
+            <Box 
+              sx={{ 
+                aspectRatio: '16/9', borderRadius: 3, border: 2, borderStyle: 'dashed',
+                borderColor: media ? 'primary.main' : 'divider',
+                bgcolor: media ? 'primary.50' : 'grey.50',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', transition: 'all 0.2s'
+              }}
+            >
               {media ? (
                 isVideo ? (
-                  <video src={media} className="w-full h-full object-contain p-2" muted />
+                  <video src={media} style={{ width: '100%', height: '100%', objectFit: 'contain' }} muted />
                 ) : (
-                  <img src={media} className="w-full h-full object-contain rounded-lg p-2" alt="Source" />
+                  <img src={media} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="Source" />
                 )
               ) : (
                 <>
-                  <svg className="w-12 h-12 text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                  </svg>
-                  <p className="text-sm font-medium text-gray-500">Upload Photo or Video</p>
+                  <UploadIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
+                  <Typography variant="body2" color="text.secondary" fontWeight="bold">
+                    Click to Upload Photo or Video
+                  </Typography>
                 </>
               )}
-            </div>
-          </div>
+            </Box>
+          </Box>
           
-          <div className="mt-6 space-y-4">
-            <label className="block text-sm font-bold text-gray-700">Prompt / Task</label>
-            <textarea 
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={isVideo ? "Ask Gemini to summarize or find info..." : "e.g. 'Add a retro filter', 'Animate the clouds'"}
-              className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-500/20 h-24 resize-none"
-            />
-          </div>
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="caption" fontWeight="bold" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Prompt / Instruction
+              </Typography>
+              <TextField 
+                fullWidth 
+                multiline 
+                rows={3} 
+                variant="outlined"
+                placeholder={isVideo ? "Ask Gemini to analyze content..." : "e.g. 'Add a sunset', 'Cinematic movement'"}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                sx={{ bgcolor: 'grey.50' }}
+              />
+            </Box>
 
-          <div className="grid grid-cols-2 gap-3 mt-6">
-            {!isVideo ? (
-              <>
-                <button 
-                  onClick={() => handleAction('edit')}
-                  disabled={loading || !media}
-                  className="px-4 py-3 bg-emerald-600 text-white rounded-lg font-bold shadow-md hover:bg-emerald-700 disabled:bg-gray-300 transition-all flex items-center justify-center gap-2"
-                >
-                  AI Edit
-                </button>
-                <button 
-                  onClick={() => handleAction('animate')}
-                  disabled={loading || !media}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-lg font-bold shadow-md hover:bg-blue-700 disabled:bg-gray-300 transition-all flex items-center justify-center gap-2"
-                >
-                  Animate
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={() => handleAction('analyze')}
-                disabled={loading || !media}
-                className="col-span-2 px-4 py-3 bg-purple-600 text-white rounded-lg font-bold shadow-md hover:bg-purple-700 disabled:bg-gray-300 transition-all flex items-center justify-center gap-2"
-              >
-                Analyze with Pro
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+            <Grid container spacing={2}>
+              {!isVideo ? (
+                <>
+                  <Grid item xs={6}>
+                    <Button 
+                      fullWidth variant="contained" 
+                      startIcon={<EditIcon />}
+                      onClick={() => handleAction('edit')}
+                      disabled={loading || !media}
+                    >
+                      AI Edit
+                    </Button>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Button 
+                      fullWidth variant="contained" color="info"
+                      startIcon={<PlayIcon />}
+                      onClick={() => handleAction('animate')}
+                      disabled={loading || !media}
+                    >
+                      Animate
+                    </Button>
+                  </Grid>
+                </>
+              ) : (
+                <Grid item xs={12}>
+                  <Button 
+                    fullWidth variant="contained" color="secondary"
+                    startIcon={<AnalyzeIcon />}
+                    onClick={() => handleAction('analyze')}
+                    disabled={loading || !media}
+                  >
+                    Analyze with Gemini Pro
+                  </Button>
+                </Grid>
+              )}
+            </Grid>
+          </Stack>
+        </Paper>
+      </Grid>
 
-      <div className="lg:col-span-7">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-full min-h-[400px] flex flex-col">
-          <h2 className="text-lg font-bold text-gray-800 mb-4">Output</h2>
-          <div className="flex-grow rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center relative overflow-hidden">
+      <Grid item xs={12} lg={7}>
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            p: 4, border: 1, borderColor: 'divider', borderRadius: 4,
+            height: '100%', display: 'flex', flexDirection: 'column'
+          }}
+        >
+          <Typography variant="h6" fontWeight="bold" gutterBottom>Production Output</Typography>
+          
+          <Box 
+            sx={{ 
+              flexGrow: 1, borderRadius: 3, bgcolor: 'grey.100', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              minHeight: 400, position: 'relative', border: 1, borderColor: 'divider'
+            }}
+          >
             {loading ? (
-              <div className="text-center p-8">
-                <div className="inline-block w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="font-bold text-emerald-800">{statusMsg}</p>
-              </div>
+              <Stack alignItems="center" spacing={2}>
+                <CircularProgress color="primary" />
+                <Typography variant="body2" fontWeight="bold" color="primary.dark">{statusMsg}</Typography>
+              </Stack>
             ) : result ? (
               result.type === 'image' ? (
-                <img src={result.url} className="max-w-full max-h-full object-contain shadow-lg rounded" alt="Result" />
+                <img src={result.url} style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }} alt="Result" />
               ) : result.type === 'video' ? (
-                <video src={result.url} controls autoPlay loop className="max-w-full max-h-full shadow-lg rounded" />
+                <video src={result.url} controls autoPlay loop style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 8, boxShadow: '0 8px 32px rgba(0,0,0,0.1)' }} />
               ) : (
-                <div className="p-8 prose prose-emerald max-w-none w-full h-full overflow-y-auto">
-                  <p className="text-gray-800 whitespace-pre-wrap">{result.text}</p>
-                </div>
+                <Box sx={{ p: 4, width: '100%', height: '100%', overflowY: 'auto' }}>
+                  <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>{result.text}</Typography>
+                </Box>
               )
             ) : (
-              <div className="text-gray-300 text-center">
-                <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                <p className="font-medium">Output will appear here</p>
-              </div>
+              <Stack alignItems="center" spacing={2} sx={{ color: 'text.disabled' }}>
+                <LibraryIcon sx={{ fontSize: 64 }} />
+                <Typography variant="body1" fontWeight="medium">Output will appear here</Typography>
+              </Stack>
             )}
-          </div>
-        </div>
-      </div>
-    </div>
+          </Box>
+        </Paper>
+      </Grid>
+    </Grid>
   );
 };
 

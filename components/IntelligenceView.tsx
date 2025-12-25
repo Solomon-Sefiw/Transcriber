@@ -1,5 +1,16 @@
 
 import React, { useState } from 'react';
+import { 
+  Box, Paper, Typography, TextField, Button, Grid, 
+  Tabs, Tab, Stack, Link, CircularProgress, Divider, Alert 
+} from '@mui/material';
+import { 
+  Search as SearchIcon, 
+  Map as MapIcon, 
+  Psychology as PsychologyIcon, 
+  Speed as SpeedIcon,
+  Link as LinkIcon
+} from '@mui/icons-material';
 import { queryIntelligence, fastChat } from '../services/geminiService';
 
 const IntelligenceView: React.FC = () => {
@@ -33,44 +44,95 @@ const IntelligenceView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100">
-        <h2 className="text-2xl font-black text-gray-900 mb-8">Intelligence Portal</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10">
-          {['search', 'maps', 'deep', 'fast'].map(m => (
-            <button key={m} onClick={() => setMode(m as any)} className={`px-4 py-3 rounded-2xl text-xs font-black border uppercase tracking-widest transition-all ${mode === m ? 'bg-emerald-600 text-white shadow-xl' : 'bg-white text-gray-400 border-gray-100'}`}>
-              {m === 'deep' ? 'Deep Thinking' : m === 'fast' ? 'Flash Consult' : m}
-            </button>
-          ))}
-        </div>
-        <div className="flex gap-4">
-          <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Inquire with AI..." className="flex-grow p-5 bg-slate-50 border rounded-2xl focus:ring-4 focus:ring-emerald-500/10 outline-none text-lg" onKeyDown={(e) => e.key === 'Enter' && handleQuery()} />
-          <button onClick={handleQuery} disabled={loading} className="px-10 py-5 bg-emerald-600 text-white rounded-2xl font-black shadow-xl disabled:bg-gray-300">
-            {loading ? 'Thinking...' : 'Consult'}
-          </button>
-        </div>
-      </div>
+    <Stack spacing={4}>
+      <Paper elevation={0} sx={{ p: 6, border: 1, borderColor: 'divider', borderRadius: 6 }}>
+        <Typography variant="h5" fontWeight="bold" gutterBottom>Intelligence Portal</Typography>
+        
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 4 }}>
+          <Tabs 
+            value={mode} 
+            onChange={(_e, v) => setMode(v)} 
+            textColor="primary" 
+            indicatorColor="primary"
+          >
+            <Tab icon={<SearchIcon />} iconPosition="start" label="Search" value="search" />
+            <Tab icon={<MapIcon />} iconPosition="start" label="Geo Grounding" value="maps" />
+            <Tab icon={<PsychologyIcon />} iconPosition="start" label="Deep Thinking" value="deep" />
+            <Tab icon={<SpeedIcon />} iconPosition="start" label="Flash Assist" value="fast" />
+          </Tabs>
+        </Box>
+
+        <Grid container spacing={2}>
+          <Grid item xs>
+            <TextField 
+              fullWidth 
+              variant="outlined" 
+              placeholder="Inquire with official AI..." 
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleQuery()}
+              sx={{ bgcolor: 'grey.50' }}
+            />
+          </Grid>
+          <Grid item>
+            <Button 
+              variant="contained" 
+              size="large" 
+              sx={{ height: '100%', px: 6, fontWeight: 'bold' }}
+              onClick={handleQuery}
+              disabled={loading}
+              startIcon={loading && <CircularProgress size={20} color="inherit" />}
+            >
+              {loading ? 'Consulting...' : 'Consult'}
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {result && (
-        <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 animate-fade-in">
-          <p className="whitespace-pre-wrap text-slate-800 text-lg leading-relaxed">{result.text}</p>
+        <Paper elevation={0} sx={{ p: 6, border: 1, borderColor: 'divider', borderRadius: 6 }}>
+          <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: '1.1rem' }}>
+            {result.text}
+          </Typography>
+
           {result.grounding.length > 0 && (
-            <div className="mt-12 pt-8 border-t flex flex-wrap gap-4">
-              {result.grounding.map((chunk: any, idx) => {
-                const item = chunk.web || chunk.maps;
-                if (!item) return null;
-                return (
-                  <a key={idx} href={item.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 bg-slate-50 border rounded-xl text-sm font-bold hover:bg-emerald-50">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.828a4 4 0 005.656 0l4-4a4 4 0 10-5.656-5.656l-1.1 1.1"/></svg>
-                    {item.title}
-                  </a>
-                );
-              })}
-            </div>
+            <Box sx={{ mt: 6, pt: 4, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="overline" color="text.secondary" fontWeight="black" gutterBottom display="block">
+                Reference Grounding
+              </Typography>
+              <Grid container spacing={2}>
+                {result.grounding.map((chunk: any, idx) => {
+                  const item = chunk.web || chunk.maps;
+                  if (!item) return null;
+                  return (
+                    <Grid item key={idx} xs={12} sm={6} md={4}>
+                      <Paper 
+                        component={Link} 
+                        href={item.uri} 
+                        target="_blank" 
+                        underline="none"
+                        sx={{ 
+                          p: 2, display: 'flex', alignItems: 'center', gap: 2, 
+                          bgcolor: 'grey.50', border: 1, borderColor: 'divider',
+                          '&:hover': { bgcolor: 'primary.50', borderColor: 'primary.main' }
+                        }}
+                      >
+                        <Box sx={{ p: 1, bgcolor: 'background.paper', borderRadius: 2, color: 'primary.main', display: 'flex' }}>
+                          <LinkIcon fontSize="small" />
+                        </Box>
+                        <Typography variant="caption" fontWeight="bold" noWrap color="text.primary">
+                          {item.title}
+                        </Typography>
+                      </Paper>
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            </Box>
           )}
-        </div>
+        </Paper>
       )}
-    </div>
+    </Stack>
   );
 };
 

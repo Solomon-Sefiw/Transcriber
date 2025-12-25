@@ -1,5 +1,18 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Box, Paper, Typography, Button, Grid, TextField, 
+  CircularProgress, IconButton, Chip, Stack, Alert 
+} from '@mui/material';
+import { 
+  Mic as MicIcon, 
+  Stop as StopIcon, 
+  CloudUpload as UploadIcon, 
+  Download as DownloadIcon,
+  Description as DocIcon,
+  PictureAsPdf as PdfIcon,
+  Language as LanguageIcon
+} from '@mui/icons-material';
 import { AppStatus } from '../types';
 import { transcribeAudio } from '../services/geminiService';
 import { exportToPdf, exportToDoc } from '../utils/exportUtils';
@@ -27,11 +40,11 @@ const TranscriptionView: React.FC = () => {
 
   const getStatusConfig = () => {
     switch (status) {
-      case AppStatus.RECORDING: return { label: 'Recording', color: 'bg-red-500', icon: 'M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z M19 10v1a7 7 0 01-14 0v-1' };
-      case AppStatus.PROCESSING: return { label: 'Processing', color: 'bg-blue-500', icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9' };
-      case AppStatus.COMPLETED: return { label: 'Success', color: 'bg-emerald-500', icon: 'M5 13l4 4L19 7' };
-      case AppStatus.ERROR: return { label: 'Error', color: 'bg-orange-500', icon: 'M12 8v4m0 4h.01' };
-      default: return { label: 'System Idle', color: 'bg-slate-400', icon: 'M5 13l4 4L19 7' };
+      case AppStatus.RECORDING: return { label: 'Recording', color: 'error', icon: <MicIcon /> };
+      case AppStatus.PROCESSING: return { label: 'AI Processing', color: 'info', icon: <CircularProgress size={20} color="inherit" /> };
+      case AppStatus.COMPLETED: return { label: 'Success', color: 'success', icon: <StopIcon /> };
+      case AppStatus.ERROR: return { label: 'Error', color: 'error', icon: <MicIcon /> };
+      default: return { label: 'System Idle', color: 'default', icon: <MicIcon /> };
     }
   };
 
@@ -121,65 +134,179 @@ const TranscriptionView: React.FC = () => {
   const config = getStatusConfig();
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="flex items-center gap-6 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <div className={`w-12 h-12 ${config.color} rounded-full flex items-center justify-center text-white shadow-lg`}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={config.icon}></path></svg>
-        </div>
-        <div className="flex-grow">
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">System Status</p>
-          <div className="flex items-center gap-2">
-            <h3 className="text-xl font-black text-gray-900">{config.label}</h3>
-            {status === AppStatus.RECORDING && <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>}
-          </div>
-        </div>
-        {language && (
-          <div className="text-right border-l pl-6">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Language</p>
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">{language}</span>
-          </div>
-        )}
-      </div>
+    <Stack spacing={4}>
+      <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 4 }}>
+        <Grid container alignItems="center" spacing={3}>
+          <Grid item>
+            <Box 
+              sx={{ 
+                width: 56, height: 56, borderRadius: '50%', 
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                bgcolor: status === AppStatus.RECORDING ? 'error.main' : 'grey.200',
+                color: status === AppStatus.RECORDING ? 'white' : 'text.primary',
+                boxShadow: status === AppStatus.RECORDING ? 4 : 0
+              }}
+            >
+              {config.icon}
+            </Box>
+          </Grid>
+          <Grid item xs>
+            <Typography variant="overline" color="text.secondary" fontWeight="bold">
+              System Status
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h5" fontWeight="black">
+                {config.label}
+              </Typography>
+              {status === AppStatus.RECORDING && (
+                <Box component="span" sx={{ width: 8, height: 8, bgcolor: 'error.main', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+              )}
+            </Box>
+          </Grid>
+          {language && (
+            <Grid item sx={{ borderLeft: 1, borderColor: 'divider', pl: 3 }}>
+              <Typography variant="overline" color="text.secondary" fontWeight="bold">
+                Language
+              </Typography>
+              <Box>
+                <Chip icon={<LanguageIcon fontSize="small" />} label={language} color="primary" variant="outlined" size="small" />
+              </Box>
+            </Grid>
+          )}
+        </Grid>
+      </Paper>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="bg-white p-10 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center space-y-6">
-          <div className="w-20 h-20 bg-slate-50 border-4 border-emerald-100 rounded-full flex items-center justify-center">
-             <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
-          </div>
-          <button 
-            onClick={status === AppStatus.RECORDING ? stopRecording : startRecording}
-            className={`w-full py-4 ${status === AppStatus.RECORDING ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white rounded-xl font-black shadow-lg transition-all`}
+      <Grid container spacing={4}>
+        <Grid item xs={12} md={6}>
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 6, textAlign: 'center', border: 1, borderColor: 'divider', 
+              borderRadius: 4, bgcolor: 'background.paper', height: '100%',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3
+            }}
           >
-            {status === AppStatus.RECORDING ? `Stop (${Math.floor(recordingTime/60)}:${(recordingTime%60).toString().padStart(2,'0')})` : 'Start Real-time Recording'}
-          </button>
-        </div>
+            <Box sx={{ p: 2, bgcolor: 'primary.light', borderRadius: '50%', color: 'primary.dark' }}>
+              <MicIcon sx={{ fontSize: 40 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight="bold">Live Voice Transcription</Typography>
+              <Typography variant="body2" color="text.secondary">Speak directly for real-time capture</Typography>
+            </Box>
+            <Button 
+              variant="contained" 
+              fullWidth
+              size="large"
+              color={status === AppStatus.RECORDING ? 'error' : 'primary'}
+              onClick={status === AppStatus.RECORDING ? stopRecording : startRecording}
+              sx={{ py: 2, fontWeight: 'bold' }}
+            >
+              {status === AppStatus.RECORDING 
+                ? `Stop Recording (${Math.floor(recordingTime/60)}:${(recordingTime%60).toString().padStart(2,'0')})` 
+                : 'Start Real-time Recording'}
+            </Button>
+          </Paper>
+        </Grid>
 
-        <div className="bg-white p-10 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center space-y-6 relative group">
-          <input type="file" accept="audio/*" onChange={(e) => setAudioBlob(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-          <div className="w-20 h-20 bg-slate-50 border-4 border-blue-100 rounded-full flex items-center justify-center">
-             <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-          </div>
-          {audioBlob && status === AppStatus.IDLE ? (
-            <button onClick={handleBatchRefine} className="w-full py-4 bg-blue-600 text-white rounded-xl font-black shadow-lg z-20">Process {audioBlob.name}</button>
-          ) : (
-            <div className="w-full py-4 bg-slate-100 text-slate-400 rounded-xl font-black">Upload Official Audio</div>
-          )}
-        </div>
-      </div>
+        <Grid item xs={12} md={6}>
+          <Paper 
+            elevation={0} 
+            sx={{ 
+              p: 6, textAlign: 'center', border: 1, borderColor: 'divider', 
+              borderRadius: 4, bgcolor: 'background.paper', height: '100%',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
+              position: 'relative'
+            }}
+          >
+            <input 
+              type="file" 
+              accept="audio/*" 
+              onChange={(e) => setAudioBlob(e.target.files?.[0] || null)} 
+              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10 }} 
+            />
+            <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: '50%', color: 'info.dark' }}>
+              <UploadIcon sx={{ fontSize: 40 }} />
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight="bold">Batch File Upload</Typography>
+              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
+                {audioBlob ? audioBlob.name : 'Upload official audio records'}
+              </Typography>
+            </Box>
+            {audioBlob && status === AppStatus.IDLE ? (
+              <Button 
+                variant="contained" 
+                color="info" 
+                fullWidth
+                size="large"
+                onClick={handleBatchRefine}
+                sx={{ py: 2, fontWeight: 'bold', zIndex: 20 }}
+              >
+                Refine & Transcribe
+              </Button>
+            ) : (
+              <Button variant="outlined" color="inherit" fullWidth size="large" sx={{ py: 2, borderStyle: 'dashed' }}>
+                Select Audio File
+              </Button>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
 
-      <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <h3 className="text-xl font-black text-gray-900">Document Transcript</h3>
+      <Paper elevation={0} sx={{ p: 4, border: 1, borderColor: 'divider', borderRadius: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h6" fontWeight="bold">Document Transcript</Typography>
           {transcript && (
-            <div className="flex gap-3">
-              <button onClick={() => exportToDoc(transcript, 'EthioGov_Transcript')} className="px-4 py-2 bg-slate-900 text-white text-xs font-black rounded-xl">DOC</button>
-              <button onClick={() => exportToPdf(transcript, 'EthioGov_Transcript')} className="px-4 py-2 bg-emerald-600 text-white text-xs font-black rounded-xl">PDF</button>
-            </div>
+            <Stack direction="row" spacing={1}>
+              <Button 
+                size="small" 
+                variant="outlined" 
+                startIcon={<DocIcon />} 
+                onClick={() => exportToDoc(transcript, 'EthioGov_Transcript')}
+              >
+                Word
+              </Button>
+              <Button 
+                size="small" 
+                variant="outlined" 
+                color="error" 
+                startIcon={<PdfIcon />} 
+                onClick={() => exportToPdf(transcript, 'EthioGov_Transcript')}
+              >
+                PDF
+              </Button>
+            </Stack>
           )}
-        </div>
-        <textarea readOnly className="w-full min-h-[400px] p-8 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-medium leading-relaxed resize-none shadow-inner text-slate-800 text-lg" value={transcript} placeholder="Awaiting transcription input..." />
-      </div>
-    </div>
+        </Box>
+
+        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+        <TextField
+          fullWidth
+          multiline
+          minRows={15}
+          variant="outlined"
+          value={transcript}
+          placeholder="Official transcription output will manifest here..."
+          InputProps={{
+            readOnly: true,
+            sx: { 
+              bgcolor: 'grey.50',
+              fontFamily: 'monospace',
+              fontSize: '1rem',
+              '& fieldset': { border: 'none' }
+            }
+          }}
+        />
+      </Paper>
+      <style>{`
+        @keyframes pulse {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.2); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+    </Stack>
   );
 };
 

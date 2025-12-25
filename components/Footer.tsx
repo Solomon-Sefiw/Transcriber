@@ -1,23 +1,41 @@
 
 import React from 'react';
+import { Box, Container, Typography, Link, Stack } from '@mui/material';
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-gray-50 border-t border-gray-200 mt-auto py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="text-center md:text-left">
-            <p className="text-sm text-gray-500">© {new Date().getFullYear()} EthioTranscribe. Developed for the Federal Democratic Republic of Ethiopia.</p>
-            <p className="text-xs text-gray-400 mt-1">Powered by Advanced AI for Official Government Use.</p>
-          </div>
-          <div className="flex gap-6">
-            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">Privacy</a>
-            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">Terms</a>
-            <a href="#" className="text-gray-400 hover:text-gray-600 transition-colors">Accessibility</a>
-          </div>
-        </div>
-      </div>
-    </footer>
+    <Box component="footer" sx={{ bgcolor: 'white', py: 6, mt: 'auto', borderTop: 1, borderColor: 'divider' }}>
+      <Container maxWidth="lg">
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems="center" spacing={4}>
+          <Box sx={{ textAlign: { xs: 'center', md: 'left' } }}>
+            <Typography variant="subtitle2" color="primary.main" fontWeight={900}>
+              Waghimra Nationality Administration HighCourt
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Official Judicial Support System | Federal Democratic Republic of Ethiopia
+            </Typography>
+            <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1, justifyContent: { xs: 'center', md: 'flex-start' } }}>
+              <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: 1 }}>
+                Developed by
+              </Typography>
+              <Typography variant="caption" sx={{ fontWeight: 900, color: 'primary.main', bgcolor: 'secondary.light', px: 1, borderRadius: 0.5 }}>
+                2S Tec
+              </Typography>
+            </Box>
+          </Box>
+          
+          <Stack direction="row" spacing={3}>
+            <Link href="#" color="text.secondary" variant="caption" fontWeight="bold" underline="hover">Judicial Ethics</Link>
+            <Link href="#" color="text.secondary" variant="caption" fontWeight="bold" underline="hover">Case Privacy</Link>
+            <Link href="#" color="text.secondary" variant="caption" fontWeight="bold" underline="hover">Accessibility</Link>
+            <Link href="#" color="text.secondary" variant="caption" fontWeight="bold" underline="hover">Help Desk</Link>
+          </Stack>
+        </Stack>
+        <Typography variant="caption" color="text.disabled" align="center" sx={{ display: 'block', mt: 4, pt: 2, borderTop: 1, borderColor: 'grey.50' }}>
+          © {new Date().getFullYear()} Waghimra HighCourt. All judicial data is protected under sovereign privacy laws.
+        </Typography>
+      </Container>
+    </Box>
   );
 };
 

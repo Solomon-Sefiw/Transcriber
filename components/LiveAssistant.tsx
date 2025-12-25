@@ -1,5 +1,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Box, Paper, Typography, Button, IconButton, 
+  Stack, Fade, Container, Avatar 
+} from '@mui/material';
+import { 
+  Mic as MicIcon, 
+  SettingsVoice as VoiceIcon,
+  GraphicEq as WaveIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
 import { GoogleGenAI, Modality } from '@google/genai';
 
 const LiveAssistant: React.FC = () => {
@@ -28,7 +38,7 @@ const LiveAssistant: React.FC = () => {
   };
 
   const startSession = async () => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
     
@@ -69,10 +79,10 @@ const LiveAssistant: React.FC = () => {
             nextStartTimeRef.current += buffer.duration;
           }
           if (msg.serverContent?.outputTranscription) {
-             setTranscription(prev => [...prev.slice(-5), `AI: ${msg.serverContent?.outputTranscription?.text}`]);
+             setTranscription(prev => [...prev.slice(-10), `AI: ${msg.serverContent?.outputTranscription?.text}`]);
           }
           if (msg.serverContent?.inputTranscription) {
-             setTranscription(prev => [...prev.slice(-5), `You: ${msg.serverContent?.inputTranscription?.text}`]);
+             setTranscription(prev => [...prev.slice(-10), `User: ${msg.serverContent?.inputTranscription?.text}`]);
           }
         },
         onclose: () => setIsActive(false),
@@ -81,7 +91,7 @@ const LiveAssistant: React.FC = () => {
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-        systemInstruction: "You are a helpful assistant for the Ethiopian Government. You speak naturally and professionally. Assist the user with official tasks or information.",
+        systemInstruction: "You are a helpful assistant for the Ethiopian Government. You speak naturally and professionally.",
         outputAudioTranscription: {},
         inputAudioTranscription: {}
       }
@@ -99,33 +109,74 @@ const LiveAssistant: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-12 text-center">
-      <div className={`w-48 h-48 mx-auto rounded-full border-8 transition-all flex items-center justify-center ${isActive ? 'border-emerald-500 animate-pulse bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}>
-        <svg className={`w-24 h-24 ${isActive ? 'text-emerald-600' : 'text-gray-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path>
-        </svg>
-      </div>
-      
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">GovVoice Assistant</h2>
-        <p className="text-gray-500 mt-2">Speak naturally with the official government AI interface.</p>
-      </div>
+    <Container maxWidth="sm">
+      <Stack spacing={4} alignItems="center" sx={{ py: 6 }}>
+        <Box 
+          sx={{ 
+            width: 200, height: 200, borderRadius: '50%', 
+            border: 8, borderColor: isActive ? 'primary.main' : 'grey.200',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            bgcolor: isActive ? 'primary.50' : 'grey.50',
+            transition: 'all 0.5s',
+            position: 'relative'
+          }}
+        >
+          {isActive ? <WaveIcon sx={{ fontSize: 80, color: 'primary.main', animation: 'voicePulse 1.5s infinite' }} /> : <MicIcon sx={{ fontSize: 80, color: 'grey.300' }} />}
+          
+          {isActive && (
+            <Fade in={true}>
+              <Box sx={{ position: 'absolute', bottom: -20, bgcolor: 'primary.main', color: 'white', px: 2, py: 0.5, borderRadius: 10, fontSize: '0.75rem', fontWeight: 'bold' }}>
+                LISTENING
+              </Box>
+            </Fade>
+          )}
+        </Box>
+        
+        <Box textAlign="center">
+          <Typography variant="h5" fontWeight="black" gutterBottom>GovVoice Assistant</Typography>
+          <Typography variant="body2" color="text.secondary">Speak naturally with the official government AI interface.</Typography>
+        </Box>
 
-      <div className="bg-gray-900 text-emerald-400 p-6 rounded-xl font-mono text-left h-48 overflow-y-auto shadow-inner border border-gray-800">
-        {transcription.length === 0 ? (
-          <p className="text-gray-600 italic">Waiting for connection...</p>
-        ) : (
-          transcription.map((t, i) => <div key={i} className="mb-1">{t}</div>)
-        )}
-      </div>
+        <Paper 
+          elevation={0} 
+          sx={{ 
+            width: '100%', height: 240, bgcolor: 'grey.900', p: 3, 
+            borderRadius: 4, overflowY: 'auto', border: 1, borderColor: 'grey.800'
+          }}
+        >
+          {transcription.length === 0 ? (
+            <Typography variant="body2" sx={{ color: 'grey.600', fontStyle: 'italic' }}>
+              Waiting for voice input...
+            </Typography>
+          ) : (
+            <Stack spacing={1}>
+              {transcription.map((t, i) => (
+                <Typography key={i} variant="caption" sx={{ color: t.startsWith('AI') ? 'primary.light' : 'grey.300', fontFamily: 'monospace', display: 'block' }}>
+                  {t}
+                </Typography>
+              ))}
+            </Stack>
+          )}
+        </Paper>
 
-      <button 
-        onClick={isActive ? stopSession : startSession}
-        className={`px-12 py-4 rounded-full text-lg font-bold shadow-xl transition-all transform hover:scale-105 active:scale-95 ${isActive ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}
-      >
-        {isActive ? 'Disconnect Assistant' : 'Connect Voice Assistant'}
-      </button>
-    </div>
+        <Button 
+          variant="contained" 
+          size="large" 
+          color={isActive ? 'error' : 'primary'}
+          sx={{ py: 2, px: 8, borderRadius: 50, fontWeight: 'bold', fontSize: '1.1rem', boxShadow: 8 }}
+          onClick={isActive ? stopSession : startSession}
+        >
+          {isActive ? 'Disconnect' : 'Connect Assistant'}
+        </Button>
+      </Stack>
+      <style>{`
+        @keyframes voicePulse {
+          0% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.1); opacity: 0.7; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </Container>
   );
 };
 

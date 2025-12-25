@@ -1,6 +1,6 @@
 {
-  "name": "EthioGov AI Suite",
-  "description": "Unified AI platform for the Ethiopian Government.",
+  "name": "Waghimra HighCourt AI Suite",
+  "description": "Judicial AI support platform for the Waghimra Nationality Administration HighCourt. Developed by 2S Tec.",
   "requestFramePermissions": [
     "camera",
     "microphone",

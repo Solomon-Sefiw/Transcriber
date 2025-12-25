@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { ThemeProvider, createTheme, Box, Container, Typography, CssBaseline, Fade } from '@mui/material';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import TranscriptionView from './components/TranscriptionView';
@@ -8,48 +9,122 @@ import ImageVideoStudio from './components/ImageVideoStudio';
 import LiveAssistant from './components/LiveAssistant';
 import { AppTab } from './types';
 
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#0a3d52', // Official Branding Color
+      contrastText: '#ffffff',
+    },
+    secondary: {
+      main: '#c5a059', // Judicial Gold (matching the logo art)
+    },
+    error: {
+      main: '#ef3340',
+    },
+    background: {
+      default: '#f4f7f9',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h2: {
+      fontWeight: 900,
+      letterSpacing: '-0.02em',
+      color: '#0a3d52',
+    },
+    h5: {
+      fontWeight: 800,
+      color: '#0a3d52',
+    },
+  },
+  shape: {
+    borderRadius: 8,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          fontWeight: 700,
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          boxShadow: '0px 4px 20px rgba(10, 61, 82, 0.05)',
+        },
+      },
+    },
+  },
+});
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('transcription');
 
   const getTitle = () => {
     switch (activeTab) {
-      case 'transcription': return 'Audio Transcription & Diarization';
-      case 'intelligence': return 'Government Intelligence Portal';
-      case 'studio': return 'Media & Video Production Studio';
-      case 'live': return 'Real-time Voice Interface';
+      case 'transcription': return 'Hearing Transcription & Diarization';
+      case 'intelligence': return 'Judicial Intelligence Portal';
+      case 'studio': return 'Evidence & Media Processing Studio';
+      case 'live': return 'Real-time Court Assistant';
       default: return '';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfd] flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
-      
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16">
-        <div className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-             <div className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-200">Official Portal</div>
-             <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
-             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">End-to-End Encrypted</div>
-          </div>
-          <h2 className="text-5xl font-black text-gray-900 tracking-tight leading-none mb-6">
-            {getTitle()}
-          </h2>
-          <p className="text-xl text-gray-500 max-w-2xl leading-relaxed">
-            Advanced artificial intelligence specialized for the sovereign needs of the Federal Democratic Republic of Ethiopia.
-          </p>
-        </div>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+        
+        <Container maxWidth="lg" sx={{ py: 6, flexGrow: 1 }}>
+          <Box sx={{ mb: 6 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <Typography 
+                variant="overline" 
+                sx={{ 
+                  bgcolor: 'secondary.main', 
+                  color: 'primary.main', 
+                  px: 1.5, 
+                  py: 0.3, 
+                  borderRadius: 1, 
+                  fontWeight: 900,
+                  fontSize: '0.65rem'
+                }}
+              >
+                OFFICIAL HIGH COURT SYSTEM
+              </Typography>
+              <Box sx={{ width: 4, height: 4, bgcolor: 'divider', borderRadius: '50%' }} />
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 'bold' }}>
+                Secure Judicial Node
+              </Typography>
+            </Box>
+            
+            <Typography variant="h2" component="h1" gutterBottom>
+              {getTitle()}
+            </Typography>
+            
+            <Typography variant="h6" sx={{ color: 'text.secondary', maxWidth: 800, fontWeight: 400, opacity: 0.8 }}>
+              Advanced AI resources for the Waghimra Nationality Administration HighCourt, providing sovereignty and efficiency to the legal process.
+            </Typography>
+          </Box>
 
-        <div className="transition-all duration-500 transform">
-          {activeTab === 'transcription' && <TranscriptionView />}
-          {activeTab === 'intelligence' && <IntelligenceView />}
-          {activeTab === 'studio' && <ImageVideoStudio />}
-          {activeTab === 'live' && <LiveAssistant />}
-        </div>
-      </main>
+          <Fade in={true} timeout={500}>
+            <Box>
+              {activeTab === 'transcription' && <TranscriptionView />}
+              {activeTab === 'intelligence' && <IntelligenceView />}
+              {activeTab === 'studio' && <ImageVideoStudio />}
+              {activeTab === 'live' && <LiveAssistant />}
+            </Box>
+          </Fade>
+        </Container>
 
-      <Footer />
-    </div>
+        <Footer />
+      </Box>
+    </ThemeProvider>
   );
 };
 
