@@ -77,7 +77,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
     const url = URL.createObjectURL(recordedBlob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AudioRecord_${caseTitle || 'UnNamed'}.webm`;
+    a.download = `AudioRecord_${caseTitle || 'Reference'}.webm`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -174,7 +174,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
             </Typography>
           </Grid>
           <Grid item>
-            <Button variant="outlined" color="primary" onClick={handleResetConsole} startIcon={<ResetIcon />} sx={{ borderRadius: 2 }}>New Hearing</Button>
+            <Button variant="outlined" color="primary" onClick={handleResetConsole} startIcon={<ResetIcon />} sx={{ borderRadius: 2 }}>Reset</Button>
           </Grid>
         </Grid>
       </Paper>
@@ -254,7 +254,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
                   <Tooltip title="Export to Word Document">
                     <Button 
                       variant="contained" color="primary" 
-                      onClick={() => exportToDoc(transcript, caseTitle || 'Transcript')} 
+                      onClick={() => exportToDoc(transcript, caseTitle || 'JudicialTranscript')} 
                       disabled={!transcript}
                       startIcon={<DocIcon />}
                     >
@@ -279,7 +279,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
             ) : (
               <TextField 
                 fullWidth multiline minRows={18} variant="outlined" value={transcript} onChange={(e) => setTranscript(e.target.value)}
-                InputProps={{ sx: { bgcolor: '#fafafa', fontFamily: '"Courier New", monospace', lineHeight: 2.0 } }} 
+                InputProps={{ sx: { bgcolor: '#fafafa', fontFamily: '"Courier New", monospace', fontSize: '1rem', lineHeight: 2.2 } }} 
               />
             )}
           </Paper>
