@@ -2,29 +2,42 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, Paper, Typography, Button, Grid, TextField, 
-  CircularProgress, IconButton, Chip, Stack, Alert 
+  CircularProgress, Chip, Stack, Alert, Divider, Fade, 
+  LinearProgress, IconButton, Tooltip, Snackbar
 } from '@mui/material';
 import { 
   Mic as MicIcon, 
   Stop as StopIcon, 
   CloudUpload as UploadIcon, 
-  Download as DownloadIcon,
   Description as DocIcon,
   PictureAsPdf as PdfIcon,
-  Language as LanguageIcon
+  Language as LanguageIcon,
+  Psychology as PsychologyIcon,
+  AutoGraph as SummaryIcon,
+  DeleteOutline as DeleteIcon,
+  Gavel as GavelIcon,
+  Download as DownloadIcon,
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { AppStatus } from '../types';
-import { transcribeAudio } from '../services/geminiService';
+import { transcribeAudio, analyzeJudicialHearing } from '../services/geminiService';
 import { exportToPdf, exportToDoc } from '../utils/exportUtils';
 import { GoogleGenAI, Modality } from '@google/genai';
 
 const TranscriptionView: React.FC = () => {
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [transcript, setTranscript] = useState<string>('');
+  const [analysis, setAnalysis] = useState<string>('');
   const [language, setLanguage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  
+  // Separated states for Recording and Uploading
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [uploadedBlob, setUploadedBlob] = useState<Blob | null>(null);
+  
   const [recordingTime, setRecordingTime] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -33,32 +46,34 @@ const TranscriptionView: React.FC = () => {
 
   useEffect(() => {
     return () => {
-      stopRecording();
-      if (timerRef.current) clearInterval(timerRef.current);
+      cleanup();
     };
   }, []);
 
-  const getStatusConfig = () => {
-    switch (status) {
-      case AppStatus.RECORDING: return { label: 'Recording', color: 'error', icon: <MicIcon /> };
-      case AppStatus.PROCESSING: return { label: 'AI Processing', color: 'info', icon: <CircularProgress size={20} color="inherit" /> };
-      case AppStatus.COMPLETED: return { label: 'Success', color: 'success', icon: <StopIcon /> };
-      case AppStatus.ERROR: return { label: 'Error', color: 'error', icon: <MicIcon /> };
-      default: return { label: 'System Idle', color: 'default', icon: <MicIcon /> };
-    }
+  const cleanup = () => {
+    stopRecording();
+    if (timerRef.current) clearInterval(timerRef.current);
   };
 
   const startRecording = async () => {
     try {
       setError(null);
       setLanguage('');
+      setRecordedBlob(null);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
-      recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
-      recorder.onstop = () => setAudioBlob(new Blob(chunksRef.current, { type: 'audio/webm' }));
-      recorder.start();
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      
+      recorder.onstop = () => {
+        const finalBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setRecordedBlob(finalBlob);
+      };
+
+      recorder.start(1000);
       mediaRecorderRef.current = recorder;
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
@@ -86,11 +101,15 @@ const TranscriptionView: React.FC = () => {
             if (msg.serverContent?.inputTranscription?.text) {
               setTranscript(prev => prev + (prev ? ' ' : '') + msg.serverContent.inputTranscription.text);
             }
+          },
+          onerror: (err) => {
+            setError("Court network interruption detected.");
+            console.error(err);
           }
         },
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: "Silent government transcriber. Transcribe input verbatim.",
+          systemInstruction: "You are the official court transcriber for the Waghimra HighCourt. Transcribe verbatim. Format speakers clearly.",
           inputAudioTranscription: {}
         }
       });
@@ -100,211 +119,302 @@ const TranscriptionView: React.FC = () => {
       setRecordingTime(0);
       timerRef.current = window.setInterval(() => setRecordingTime(p => p + 1), 1000);
     } catch (e) {
-      setError("Microphone access denied.");
+      setError("Microphone access denied. Please verify judicial hardware permissions.");
     }
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    liveSessionRef.current?.close();
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+    if (liveSessionRef.current) {
+      liveSessionRef.current.close();
+      liveSessionRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     setStatus(AppStatus.IDLE);
   };
 
-  const handleBatchRefine = async () => {
-    if (!audioBlob) return;
+  const handleTranscribeBlob = async (blob: Blob) => {
     setStatus(AppStatus.PROCESSING);
+    setProgress(10);
     setError(null);
     try {
       const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
+      reader.readAsDataURL(blob);
       reader.onloadend = async () => {
+        setProgress(30);
         const base64 = (reader.result as string).split(',')[1];
-        const res = await transcribeAudio(base64, audioBlob.type);
+        const res = await transcribeAudio(base64, blob.type);
+        setProgress(80);
         setTranscript(res.transcript);
         setLanguage(res.language);
         setStatus(AppStatus.COMPLETED);
+        setProgress(100);
       };
     } catch (e: any) {
-      setError(e.message);
+      setError("Transcription engine failed: " + e.message);
       setStatus(AppStatus.ERROR);
     }
   };
 
-  const config = getStatusConfig();
+  const downloadRecordedAudio = () => {
+    if (!recordedBlob) return;
+    const url = URL.createObjectURL(recordedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Waghimra_HighCourt_Record_${new Date().toISOString()}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleJudicialAnalysis = async () => {
+    if (!transcript) return;
+    setAnalyzing(true);
+    try {
+      const result = await analyzeJudicialHearing(transcript);
+      setAnalysis(result);
+    } catch (e) {
+      setError("Judicial analysis engine timed out.");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleReset = () => {
+    setRecordedBlob(null);
+    setUploadedBlob(null);
+    setTranscript('');
+    setAnalysis('');
+    setLanguage('');
+    setStatus(AppStatus.IDLE);
+    setError(null);
+    setProgress(0);
+  };
 
   return (
-    <Stack spacing={4}>
-      <Paper elevation={0} sx={{ p: 3, border: 1, borderColor: 'divider', borderRadius: 4 }}>
-        <Grid container alignItems="center" spacing={3}>
+    <Stack spacing={4} sx={{ position: 'relative' }}>
+      {/* Dashboard Status Card */}
+      <Paper 
+        elevation={0} 
+        sx={{ 
+          p: 4, 
+          border: 1, 
+          borderColor: status === AppStatus.RECORDING ? 'error.main' : 'primary.light', 
+          borderRadius: 4, 
+          bgcolor: 'background.paper',
+          transition: 'border-color 0.3s ease'
+        }}
+      >
+        <Grid container spacing={3} alignItems="center">
           <Grid item>
-            <Box 
-              sx={{ 
-                width: 56, height: 56, borderRadius: '50%', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                bgcolor: status === AppStatus.RECORDING ? 'error.main' : 'grey.200',
-                color: status === AppStatus.RECORDING ? 'white' : 'text.primary',
-                boxShadow: status === AppStatus.RECORDING ? 4 : 0
-              }}
-            >
-              {config.icon}
-            </Box>
-          </Grid>
-          <Grid item xs>
-            <Typography variant="overline" color="text.secondary" fontWeight="bold">
-              System Status
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h5" fontWeight="black">
-                {config.label}
-              </Typography>
+            <Box sx={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box 
+                sx={{ 
+                  width: 72, height: 72, borderRadius: '50%', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  bgcolor: status === AppStatus.RECORDING ? 'error.main' : 'primary.main',
+                  color: 'white',
+                  boxShadow: status === AppStatus.RECORDING ? '0 0 20px rgba(239, 51, 64, 0.4)' : 'none',
+                  transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}
+              >
+                {status === AppStatus.PROCESSING ? <CircularProgress size={32} color="inherit" /> : <GavelIcon sx={{ fontSize: 36 }} />}
+              </Box>
               {status === AppStatus.RECORDING && (
-                <Box component="span" sx={{ width: 8, height: 8, bgcolor: 'error.main', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                <Box className="waveform-pulse" sx={{ position: 'absolute', inset: -8, border: '2px solid', borderColor: 'error.main', borderRadius: '50%', animation: 'ripple 1.2s infinite ease-out' }} />
               )}
             </Box>
           </Grid>
-          {language && (
-            <Grid item sx={{ borderLeft: 1, borderColor: 'divider', pl: 3 }}>
-              <Typography variant="overline" color="text.secondary" fontWeight="bold">
-                Language
-              </Typography>
-              <Box>
-                <Chip icon={<LanguageIcon fontSize="small" />} label={language} color="primary" variant="outlined" size="small" />
-              </Box>
-            </Grid>
-          )}
+          <Grid item xs>
+            <Typography variant="overline" color="text.disabled" sx={{ fontWeight: 900, letterSpacing: 2 }}>
+              CONSTITUTIONAL PROTOCOL ACTIVE
+            </Typography>
+            <Typography variant="h5" fontWeight="900" sx={{ color: 'primary.main', textTransform: 'uppercase' }}>
+              {status === AppStatus.RECORDING ? `LIVE HEARING: ${Math.floor(recordingTime/60)}:${(recordingTime%60).toString().padStart(2,'0')}` : 
+               status === AppStatus.PROCESSING ? 'TRANSCRIBING JUDICIAL AUDIO...' : 'HighCourt Evidence Management'}
+            </Typography>
+            {status === AppStatus.PROCESSING && <LinearProgress variant="determinate" value={progress} sx={{ mt: 2, height: 6, borderRadius: 3 }} />}
+          </Grid>
+          <Grid item>
+            <Stack direction="row" spacing={2}>
+              {language && <Chip label={language} color="secondary" icon={<LanguageIcon />} sx={{ fontWeight: 800 }} />}
+              <Button size="small" variant="text" color="primary" onClick={handleReset} startIcon={<RefreshIcon />}>Reset Console</Button>
+            </Stack>
+          </Grid>
         </Grid>
       </Paper>
 
-      <Grid container spacing={4}>
+      <Grid container spacing={3}>
+        {/* Live Recording Card */}
         <Grid item xs={12} md={6}>
           <Paper 
-            elevation={0} 
             sx={{ 
-              p: 6, textAlign: 'center', border: 1, borderColor: 'divider', 
-              borderRadius: 4, bgcolor: 'background.paper', height: '100%',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3
+              p: 4, 
+              height: '100%', 
+              borderRadius: 4, 
+              border: 2, 
+              borderStyle: (status === AppStatus.RECORDING || recordedBlob) ? 'solid' : 'dashed',
+              borderColor: status === AppStatus.RECORDING ? 'error.main' : recordedBlob ? 'secondary.main' : 'divider',
+              bgcolor: status === AppStatus.RECORDING ? 'rgba(239, 51, 64, 0.02)' : 'transparent',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+              transition: 'all 0.3s ease'
             }}
           >
-            <Box sx={{ p: 2, bgcolor: 'primary.light', borderRadius: '50%', color: 'primary.dark' }}>
-              <MicIcon sx={{ fontSize: 40 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight="bold">Live Voice Transcription</Typography>
-              <Typography variant="body2" color="text.secondary">Speak directly for real-time capture</Typography>
-            </Box>
-            <Button 
-              variant="contained" 
-              fullWidth
-              size="large"
-              color={status === AppStatus.RECORDING ? 'error' : 'primary'}
-              onClick={status === AppStatus.RECORDING ? stopRecording : startRecording}
-              sx={{ py: 2, fontWeight: 'bold' }}
-            >
-              {status === AppStatus.RECORDING 
-                ? `Stop Recording (${Math.floor(recordingTime/60)}:${(recordingTime%60).toString().padStart(2,'0')})` 
-                : 'Start Real-time Recording'}
-            </Button>
+            <Stack spacing={2} alignItems="center" sx={{ width: '100%' }}>
+              <Box sx={{ p: 2, bgcolor: status === AppStatus.RECORDING ? 'error.light' : 'primary.50', borderRadius: '50%', color: status === AppStatus.RECORDING ? 'white' : 'primary.main' }}>
+                <MicIcon fontSize="large" />
+              </Box>
+              <Typography variant="h6" fontWeight="900">Courtroom Capture</Typography>
+              
+              <Button 
+                variant="contained" 
+                size="large"
+                fullWidth
+                color={status === AppStatus.RECORDING ? 'error' : 'primary'}
+                onClick={status === AppStatus.RECORDING ? stopRecording : startRecording}
+                startIcon={status === AppStatus.RECORDING ? <StopIcon /> : <MicIcon />}
+                sx={{ py: 2, fontSize: '1rem' }}
+              >
+                {status === AppStatus.RECORDING ? 'STOP RECORDING' : 'START RECORDING'}
+              </Button>
+
+              {recordedBlob && status !== AppStatus.RECORDING && (
+                <Stack direction="row" spacing={1} sx={{ width: '100%', mt: 1 }}>
+                  <Button 
+                    variant="contained" 
+                    color="secondary" 
+                    fullWidth 
+                    startIcon={<RefreshIcon />}
+                    onClick={() => handleTranscribeBlob(recordedBlob)}
+                    disabled={status === AppStatus.PROCESSING}
+                  >
+                    FINAL TRANSCRIBE
+                  </Button>
+                  <Tooltip title="Download Audio Record">
+                    <IconButton color="primary" sx={{ border: 1, borderColor: 'primary.main' }} onClick={downloadRecordedAudio}>
+                      <DownloadIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              )}
+            </Stack>
           </Paper>
         </Grid>
 
+        {/* Upload Card */}
         <Grid item xs={12} md={6}>
           <Paper 
-            elevation={0} 
             sx={{ 
-              p: 6, textAlign: 'center', border: 1, borderColor: 'divider', 
-              borderRadius: 4, bgcolor: 'background.paper', height: '100%',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3,
-              position: 'relative'
+              p: 4, 
+              height: '100%', 
+              borderRadius: 4, 
+              border: 2, 
+              borderStyle: uploadedBlob ? 'solid' : 'dashed',
+              borderColor: uploadedBlob ? 'secondary.main' : 'divider',
+              position: 'relative',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center'
             }}
           >
-            <input 
-              type="file" 
-              accept="audio/*" 
-              onChange={(e) => setAudioBlob(e.target.files?.[0] || null)} 
-              style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10 }} 
-            />
-            <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: '50%', color: 'info.dark' }}>
-              <UploadIcon sx={{ fontSize: 40 }} />
-            </Box>
-            <Box>
-              <Typography variant="h6" fontWeight="bold">Batch File Upload</Typography>
-              <Typography variant="body2" color="text.secondary" noWrap sx={{ maxWidth: 200 }}>
-                {audioBlob ? audioBlob.name : 'Upload official audio records'}
-              </Typography>
-            </Box>
-            {audioBlob && status === AppStatus.IDLE ? (
-              <Button 
-                variant="contained" 
-                color="info" 
-                fullWidth
-                size="large"
-                onClick={handleBatchRefine}
-                sx={{ py: 2, fontWeight: 'bold', zIndex: 20 }}
-              >
-                Refine & Transcribe
-              </Button>
-            ) : (
-              <Button variant="outlined" color="inherit" fullWidth size="large" sx={{ py: 2, borderStyle: 'dashed' }}>
-                Select Audio File
-              </Button>
-            )}
+            {!uploadedBlob && <input type="file" accept="audio/*" onChange={(e) => setUploadedBlob(e.target.files?.[0] || null)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10 }} />}
+            <Stack spacing={2} alignItems="center" sx={{ width: '100%' }}>
+              <Box sx={{ p: 2, bgcolor: uploadedBlob ? 'secondary.light' : 'grey.100', borderRadius: '50%', color: uploadedBlob ? 'primary.main' : 'grey.400' }}>
+                <UploadIcon fontSize="large" />
+              </Box>
+              <Typography variant="h6" fontWeight="900">{uploadedBlob ? 'File Ready' : 'Upload Evidence'}</Typography>
+              
+              {uploadedBlob ? (
+                <Stack spacing={1} sx={{ width: '100%' }}>
+                  <Button 
+                    variant="contained" 
+                    color="secondary" 
+                    fullWidth 
+                    size="large" 
+                    onClick={() => handleTranscribeBlob(uploadedBlob)} 
+                    disabled={status === AppStatus.PROCESSING}
+                  >
+                    {status === AppStatus.PROCESSING ? 'TRANSCRIBING...' : 'TRANSCRIBE FILE'}
+                  </Button>
+                  <Button variant="text" color="error" size="small" onClick={() => setUploadedBlob(null)}>Remove File</Button>
+                </Stack>
+              ) : (
+                <Button variant="outlined" fullWidth size="large" sx={{ py: 2 }}>SELECT AUDIO FILE</Button>
+              )}
+            </Stack>
           </Paper>
         </Grid>
       </Grid>
 
-      <Paper elevation={0} sx={{ p: 4, border: 1, borderColor: 'divider', borderRadius: 4 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h6" fontWeight="bold">Document Transcript</Typography>
-          {transcript && (
-            <Stack direction="row" spacing={1}>
-              <Button 
-                size="small" 
-                variant="outlined" 
-                startIcon={<DocIcon />} 
-                onClick={() => exportToDoc(transcript, 'EthioGov_Transcript')}
-              >
-                Word
-              </Button>
-              <Button 
-                size="small" 
-                variant="outlined" 
-                color="error" 
-                startIcon={<PdfIcon />} 
-                onClick={() => exportToPdf(transcript, 'EthioGov_Transcript')}
-              >
-                PDF
-              </Button>
-            </Stack>
-          )}
+      {/* Results View */}
+      <Fade in={transcript.length > 0}>
+        <Box>
+          <Grid container spacing={3}>
+            <Grid item xs={12} lg={analysis ? 7 : 12} sx={{ transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+              <Paper elevation={0} sx={{ p: 4, border: 1, borderColor: 'divider', borderRadius: 4 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                  <Typography variant="h6" fontWeight="900" color="primary.main">OFFICIAL TRANSCRIPT</Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button variant="contained" color="secondary" size="small" startIcon={<SummaryIcon />} onClick={handleJudicialAnalysis} disabled={analyzing}>
+                      {analyzing ? 'Thinking...' : 'AI SUMMARY'}
+                    </Button>
+                    <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+                    <Button variant="outlined" size="small" startIcon={<DocIcon />} onClick={() => exportToDoc(transcript, 'HighCourt_Transcript')}>DOCX</Button>
+                    <Button variant="outlined" color="error" size="small" startIcon={<PdfIcon />} onClick={() => exportToPdf(transcript, 'HighCourt_Transcript')}>PDF</Button>
+                  </Stack>
+                </Stack>
+                
+                <TextField
+                  fullWidth multiline minRows={15} variant="outlined" value={transcript}
+                  onChange={(e) => setTranscript(e.target.value)}
+                  InputProps={{
+                    sx: { bgcolor: '#fafafa', fontFamily: '"Courier New", Courier, monospace', fontSize: '1rem', lineHeight: 1.6 }
+                  }}
+                />
+              </Paper>
+            </Grid>
+
+            {analysis && (
+              <Grid item xs={12} lg={5}>
+                <Fade in={true}>
+                  <Paper 
+                    elevation={0} 
+                    sx={{ 
+                      p: 4, border: 2, borderColor: 'secondary.main', borderRadius: 4, bgcolor: '#fffef2'
+                    }}
+                  >
+                    <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 3 }}>
+                      <PsychologyIcon color="secondary" fontSize="large" />
+                      <Typography variant="h6" fontWeight="900" color="primary.main">JUDICIAL INSIGHTS</Typography>
+                    </Stack>
+                    <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, color: '#2c3e50', fontSize: '1rem' }}>
+                      {analysis}
+                    </Typography>
+                  </Paper>
+                </Fade>
+              </Grid>
+            )}
+          </Grid>
         </Box>
+      </Fade>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}>
+        <Alert severity="error" variant="filled" onClose={() => setError(null)} sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
 
-        <TextField
-          fullWidth
-          multiline
-          minRows={15}
-          variant="outlined"
-          value={transcript}
-          placeholder="Official transcription output will manifest here..."
-          InputProps={{
-            readOnly: true,
-            sx: { 
-              bgcolor: 'grey.50',
-              fontFamily: 'monospace',
-              fontSize: '1rem',
-              '& fieldset': { border: 'none' }
-            }
-          }}
-        />
-      </Paper>
       <style>{`
-        @keyframes pulse {
-          0% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(1.2); }
-          100% { opacity: 1; transform: scale(1); }
+        @keyframes ripple {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.4); opacity: 0; }
         }
+        .waveform-pulse { pointer-events: none; }
       `}</style>
     </Stack>
   );
