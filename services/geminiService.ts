@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+
+import { GoogleGenAI } from "@google/genai";
 import { TranscriptionResponse } from "../types";
 
 export const delay = (ms: number) => {
@@ -10,7 +11,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * PRODUCTION QUOTA SAVER: Process the entire audio/video file in ONE call.
- * This is critical for users on the 20-request/day free tier.
+ * Plain text response is used instead of JSON to avoid truncation errors.
  */
 export async function transcribeFullAudio(
   base64Data: string, 
@@ -25,38 +26,39 @@ export async function transcribeFullAudio(
       contents: {
         parts: [
           { inlineData: { data: base64Data, mimeType } },
-          { text: `ROLE: Official HighCourt Stenographer - Waghimra Nationality Administration. 
-                   TASK: Verbatim transcription of this judicial recording.
-                   FOCUS: Identifying individual speakers (e.g., "JUDGE:", "DEFENDANT:", "WITNESS:").
-                   STYLE: Clear, professional, speaker-labeled text.
-                   NOTE: Verbatim accuracy is paramount. No timestamps.
-                   FORMAT: Respond ONLY with a JSON object containing "language" and "transcript" strings.` }
+          { text: `Act as Waghimra HighCourt Stenographer. 
+                   Provide a verbatim transcript with speaker labels (e.g., JUDGE:, DEFENDANT:, ጠያቂ:). 
+                   IMPORTANT: Do NOT use any Markdown formatting, bolding, or asterisks (**). 
+                   Use ONLY plain text. Ensure labels are followed by a colon and the text immediately.
+                   Respond with the transcript content only.` }
         ]
       },
       config: { 
         temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            language: { type: Type.STRING },
-            transcript: { type: Type.STRING }
-          },
-          required: ["language", "transcript"]
-        }
       }
     });
 
-    return JSON.parse(response.text || "{}") as TranscriptionResponse;
+    const text = response.text || "";
+    if (!text) throw new Error("AI returned an empty transcript.");
+
+    return {
+      transcript: text,
+      language: "Auto-detected"
+    };
   } catch (error: any) {
-    const errorMsg = error?.message || "";
+    console.error("Gemini API Error:", error);
+    const errorBody = error?.message || "";
     
-    // Handle 429 (Quota Exceeded) with parsing for the retry time
-    if (errorMsg.includes('429') && retryCount < 1) {
-      const waitMatch = errorMsg.match(/retry in ([\d.]+)s/);
+    // Improved 429 (Quota Exceeded) parsing
+    if (errorBody.includes('429') || errorBody.includes('RESOURCE_EXHAUSTED')) {
+      const waitMatch = errorBody.match(/retry in ([\d.]+)s/);
       const waitTime = waitMatch ? (parseFloat(waitMatch[1]) + 1) * 1000 : 10000;
-      await delay(waitTime);
-      return transcribeFullAudio(base64Data, mimeType, retryCount + 1);
+      
+      if (retryCount < 1) {
+        await delay(waitTime);
+        return transcribeFullAudio(base64Data, mimeType, retryCount + 1);
+      }
+      throw new Error(`QUOTA_EXCEEDED|${Math.ceil(waitTime / 1000)}`);
     }
     
     throw error;
