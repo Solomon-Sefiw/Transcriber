@@ -106,8 +106,9 @@ const TranscriptionApp: React.FC = () => {
         const mimeType = audioBlob.type || 'audio/webm';
         
         try {
-          const resultText = await transcribeAudio(base64String, mimeType);
-          setTranscript(resultText);
+          // Fix: Extract the transcript text from the TranscriptionResponse object
+          const result = await transcribeAudio(base64String, mimeType);
+          setTranscript(result.transcript);
           setStatus(AppStatus.COMPLETED);
         } catch (err: any) {
           setError(err.message || "An unexpected error occurred during transcription.");

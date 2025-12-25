@@ -11,33 +11,43 @@ import { AppTab } from './types';
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AppTab>('transcription');
 
-  const renderContent = () => {
+  const getTitle = () => {
     switch (activeTab) {
-      case 'transcription': return <TranscriptionView />;
-      case 'intelligence': return <IntelligenceView />;
-      case 'studio': return <ImageVideoStudio />;
-      case 'live': return <LiveAssistant />;
-      default: return <TranscriptionView />;
+      case 'transcription': return 'Audio Transcription & Diarization';
+      case 'intelligence': return 'Government Intelligence Portal';
+      case 'studio': return 'Media & Video Production Studio';
+      case 'live': return 'Real-time Voice Interface';
+      default: return '';
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-[#fcfcfd] flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
       <Header activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10">
-        <div className="mb-8">
-          <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
-            {activeTab === 'transcription' && 'Audio Transcription & Diarization'}
-            {activeTab === 'intelligence' && 'Government Intelligence Portal'}
-            {activeTab === 'studio' && 'Image & Video Production Studio'}
-            {activeTab === 'live' && 'Real-time Voice Assistant'}
+      
+      <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-16">
+        <div className="mb-12">
+          <div className="flex items-center gap-3 mb-4">
+             <div className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-widest rounded-full border border-emerald-200">Official Portal</div>
+             <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
+             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">End-to-End Encrypted</div>
+          </div>
+          <h2 className="text-5xl font-black text-gray-900 tracking-tight leading-none mb-6">
+            {getTitle()}
           </h2>
-          <p className="text-gray-500 mt-2">
-            Secure, AI-powered official workflows for the Federal Democratic Republic of Ethiopia.
+          <p className="text-xl text-gray-500 max-w-2xl leading-relaxed">
+            Advanced artificial intelligence specialized for the sovereign needs of the Federal Democratic Republic of Ethiopia.
           </p>
         </div>
-        {renderContent()}
+
+        <div className="transition-all duration-500 transform">
+          {activeTab === 'transcription' && <TranscriptionView />}
+          {activeTab === 'intelligence' && <IntelligenceView />}
+          {activeTab === 'studio' && <ImageVideoStudio />}
+          {activeTab === 'live' && <LiveAssistant />}
+        </div>
       </main>
+
       <Footer />
     </div>
   );

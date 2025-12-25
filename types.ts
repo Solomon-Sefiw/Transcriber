@@ -10,10 +10,9 @@ export enum AppStatus {
 
 export type AppTab = 'transcription' | 'intelligence' | 'studio' | 'live';
 
-export interface TranscriptionResult {
-  text: string;
+export interface TranscriptionResponse {
+  transcript: string;
   language: string;
-  timestamp: string;
 }
 
 export interface GroundingChunk {

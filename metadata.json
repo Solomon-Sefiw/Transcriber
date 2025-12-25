@@ -1,8 +1,9 @@
 {
   "name": "EthioGov AI Suite - Official Government Portal",
-  "description": "Integrated AI platform for the Ethiopian Government: Transcription with Diarization, Real-time Voice Assistance, Image/Video Studio, and Grounded Intelligence.",
+  "description": "Unified high-performance AI platform for the Ethiopian Government: Transcription, Intelligence, and Media Studio.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }
