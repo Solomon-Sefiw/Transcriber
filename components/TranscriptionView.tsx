@@ -17,7 +17,8 @@ import {
   DeleteOutline as DeleteIcon,
   Gavel as GavelIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
 import { AppStatus } from '../types';
 import { transcribeAudio, analyzeJudicialHearing } from '../services/geminiService';
@@ -31,7 +32,6 @@ const TranscriptionView: React.FC = () => {
   const [language, setLanguage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   
-  // Separated states for Recording and Uploading
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [uploadedBlob, setUploadedBlob] = useState<Blob | null>(null);
   
@@ -56,10 +56,17 @@ const TranscriptionView: React.FC = () => {
   };
 
   const startRecording = async () => {
+    // SECURITY CHECK: Browsers block microphone on non-HTTPS production sites
+    if (!window.isSecureContext) {
+      setError("SECURITY ERROR: Microphone access is disabled for non-secure (HTTP) connections. Please enable HTTPS on your IIS server to use live recording.");
+      return;
+    }
+
     try {
       setError(null);
       setLanguage('');
       setRecordedBlob(null);
+      
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
@@ -103,7 +110,7 @@ const TranscriptionView: React.FC = () => {
             }
           },
           onerror: (err) => {
-            setError("Court network interruption detected.");
+            setError("Court network interruption detected. Verify your internet stability.");
             console.error(err);
           }
         },
@@ -118,8 +125,14 @@ const TranscriptionView: React.FC = () => {
       setStatus(AppStatus.RECORDING);
       setRecordingTime(0);
       timerRef.current = window.setInterval(() => setRecordingTime(p => p + 1), 1000);
-    } catch (e) {
-      setError("Microphone access denied. Please verify judicial hardware permissions.");
+    } catch (e: any) {
+      if (e.name === 'NotAllowedError') {
+        setError("Permission Denied: The browser blocked microphone access. Check your browser address bar settings.");
+      } else if (e.name === 'NotFoundError') {
+        setError("Hardware Error: No microphone found. Ensure a recording device is connected.");
+      } else {
+        setError("Microphone Error: " + e.message);
+      }
     }
   };
 
@@ -251,8 +264,14 @@ const TranscriptionView: React.FC = () => {
         </Grid>
       </Paper>
 
+      {/* Connection Security Alert for IIS */}
+      {!window.isSecureContext && (
+        <Alert severity="warning" icon={<SecurityIcon />} sx={{ borderRadius: 3, fontWeight: 'bold' }}>
+          PRODUCTION NOTICE: This application is being served over an insecure connection (HTTP). Microphone access is restricted by browsers. Please deploy with <b>HTTPS</b> to enable Live Recording.
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
-        {/* Live Recording Card */}
         <Grid item xs={12} md={6}>
           <Paper 
             sx={{ 
@@ -308,7 +327,6 @@ const TranscriptionView: React.FC = () => {
           </Paper>
         </Grid>
 
-        {/* Upload Card */}
         <Grid item xs={12} md={6}>
           <Paper 
             sx={{ 
@@ -403,7 +421,7 @@ const TranscriptionView: React.FC = () => {
         </Box>
       </Fade>
 
-      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}>
+      <Snackbar open={!!error} autoHideDuration={8000} onClose={() => setError(null)}>
         <Alert severity="error" variant="filled" onClose={() => setError(null)} sx={{ width: '100%' }}>
           {error}
         </Alert>
