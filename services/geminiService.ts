@@ -11,7 +11,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
  * PRODUCTION QUOTA SAVER: Process the entire audio/video file in ONE call.
- * Plain text response is used instead of JSON to avoid truncation errors.
+ * This version is optimized for high-speed plain text output.
  */
 export async function transcribeFullAudio(
   base64Data: string, 
@@ -28,8 +28,11 @@ export async function transcribeFullAudio(
           { inlineData: { data: base64Data, mimeType } },
           { text: `Act as Waghimra HighCourt Stenographer. 
                    Provide a verbatim transcript with speaker labels (e.g., JUDGE:, DEFENDANT:, ጠያቂ:). 
-                   IMPORTANT: Do NOT use any Markdown formatting, bolding, or asterisks (**). 
-                   Use ONLY plain text. Ensure labels are followed by a colon and the text immediately.
+                   
+                   CRITICAL REQUIREMENT: Do NOT use any Markdown formatting, bolding, or asterisks (**). 
+                   Use ONLY plain text. 
+                   Ensure labels are followed by a colon and the text immediately WITH NO SPACE. 
+                   Example: convert "**ጠያቂ:** አመሰግናለሁ" to "ጠያቂ:አመሰግናለሁ።".
                    Respond with the transcript content only.` }
         ]
       },
@@ -43,13 +46,12 @@ export async function transcribeFullAudio(
 
     return {
       transcript: text,
-      language: "Auto-detected"
+      language: "Amharic/Auto"
     };
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     const errorBody = error?.message || "";
     
-    // Improved 429 (Quota Exceeded) parsing
     if (errorBody.includes('429') || errorBody.includes('RESOURCE_EXHAUSTED')) {
       const waitMatch = errorBody.match(/retry in ([\d.]+)s/);
       const waitTime = waitMatch ? (parseFloat(waitMatch[1]) + 1) * 1000 : 10000;

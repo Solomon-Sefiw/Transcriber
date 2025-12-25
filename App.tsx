@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ThemeProvider, createTheme, Box, Container, Typography, CssBaseline, Fade } from '@mui/material';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -7,18 +7,20 @@ import TranscriptionView from './components/TranscriptionView';
 import IntelligenceView from './components/IntelligenceView';
 import ImageVideoStudio from './components/ImageVideoStudio';
 import LiveAssistant from './components/LiveAssistant';
-import { AppTab } from './types';
+import AuthView from './components/AuthView';
+import JudicialArchives from './components/JudicialArchives';
+import { AppTab, User } from './types';
 
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#0a3d52', // Deep Branding Navy
+      main: '#0a3d52',
       light: '#145c7a',
       dark: '#052a3a',
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#c5a059', // Judicial Gold
+      main: '#c5a059',
       light: '#d4b984',
       dark: '#a6823e',
     },
@@ -54,37 +56,41 @@ const theme = createTheme({
   shape: {
     borderRadius: 12,
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'uppercase',
-          fontWeight: 900,
-          letterSpacing: 1,
-          padding: '12px 24px',
-          boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0 4px 12px rgba(10, 61, 82, 0.1)',
-          }
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          boxShadow: '0px 2px 15px rgba(10, 61, 82, 0.04)',
-        },
-      },
-    },
-  },
 });
 
 const App: React.FC = () => {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('transcription');
+
+  // Load user session
+  useEffect(() => {
+    const saved = localStorage.getItem('court_session');
+    if (saved) setCurrentUser(JSON.parse(saved));
+  }, []);
+
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('court_session', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('court_session');
+  };
+
+  if (!currentUser) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <AuthView onLogin={handleLogin} />
+      </ThemeProvider>
+    );
+  }
 
   const getTitle = () => {
     switch (activeTab) {
       case 'transcription': return 'Judicial Record Transcription';
+      case 'archives': return 'My Judicial Archives';
       case 'intelligence': return 'Legal Intelligence Node';
       case 'studio': return 'Evidence Analysis Studio';
       case 'live': return 'Real-time Courtroom Voice';
@@ -96,42 +102,29 @@ const App: React.FC = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+        <Header activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} />
         
         <Container maxWidth="lg" sx={{ py: 8, flexGrow: 1 }}>
           <Box sx={{ mb: 8 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-              <Typography 
-                variant="overline" 
-                sx={{ 
-                  bgcolor: 'secondary.main', 
-                  color: 'primary.main', 
-                  px: 2, 
-                  py: 0.6, 
-                  borderRadius: 1, 
-                  fontWeight: 900,
-                }}
-              >
-                SOVEREIGN JUDICIAL NETWORK
+              <Typography variant="overline" sx={{ bgcolor: 'secondary.main', color: 'primary.main', px: 2, py: 0.6, borderRadius: 1 }}>
+                AUTHENTICATED SESSION: {currentUser.role.toUpperCase()}
               </Typography>
               <Box sx={{ width: 6, height: 6, bgcolor: 'secondary.main', borderRadius: '50%' }} />
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900, letterSpacing: 1 }}>
-                2S TEC PRODUCTION ENGINE
+                ID: {currentUser.id}
               </Typography>
             </Box>
             
             <Typography variant="h2" component="h1" gutterBottom sx={{ fontSize: { xs: '2.5rem', md: '3.75rem' } }}>
               {getTitle()}
             </Typography>
-            
-            <Typography variant="h6" sx={{ color: 'text.secondary', maxWidth: 850, fontWeight: 400, lineHeight: 1.6 }}>
-              The official AI-enhanced judicial support infrastructure for the Waghimra Nationality Administration. Secure, accurate, and sovereign legal automation.
-            </Typography>
           </Box>
 
           <Fade in={true} timeout={800}>
             <Box>
-              {activeTab === 'transcription' && <TranscriptionView />}
+              {activeTab === 'transcription' && <TranscriptionView user={currentUser} />}
+              {activeTab === 'archives' && <JudicialArchives user={currentUser} />}
               {activeTab === 'intelligence' && <IntelligenceView />}
               {activeTab === 'studio' && <ImageVideoStudio />}
               {activeTab === 'live' && <LiveAssistant />}
