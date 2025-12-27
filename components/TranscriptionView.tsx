@@ -115,7 +115,11 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
           setTranscript(res.transcript);
           setStatus(AppStatus.COMPLETED);
         } catch (e: any) {
-          setError("Transcription failed. AI quota may be exhausted.");
+          if (e.message.includes('QUOTA')) {
+            setError("Quota Full. Switch to another Server node at the top right.");
+          } else {
+            setError("Transcription failed.");
+          }
           setStatus(AppStatus.ERROR);
         }
       };
@@ -174,7 +178,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
             </Typography>
           </Grid>
           <Grid item>
-            <Button variant="outlined" color="primary" onClick={handleResetConsole} startIcon={<ResetIcon />} sx={{ borderRadius: 2 }}>Reset</Button>
+            <Button variant="outlined" color="primary" onClick={handleResetConsole} startIcon={<ResetIcon />} sx={{ borderRadius: 2, fontWeight: 900 }}>Reset</Button>
           </Grid>
         </Grid>
       </Paper>
@@ -197,7 +201,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
             {recordedBlob && status !== AppStatus.RECORDING && (
               <Stack direction="row" spacing={1} sx={{ mt: 2, width: '100%' }}>
                 <Button variant="contained" color="secondary" fullWidth startIcon={<BoltIcon />} onClick={() => handleTranscribe(recordedBlob)} disabled={status === AppStatus.PROCESSING} sx={{ fontWeight: 900 }}>TRANSCRIBE</Button>
-                <Tooltip title="Download Audio (Mandatory Reference)">
+                <Tooltip title="Download Audio">
                   <IconButton color="secondary" onClick={handleDownloadAudio} sx={{ border: 1, borderRadius: 2 }}><DownloadIcon /></IconButton>
                 </Tooltip>
               </Stack>
@@ -208,7 +212,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
         <Grid item xs={12} md={6}>
           <Paper sx={{ p: 4, height: '100%', borderRadius: 4, border: 2, borderStyle: 'dashed', borderColor: 'divider', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
             {!uploadedBlob && (
-              <input type="file" accept="audio/*,video/*" onChange={(e) => setUploadedBlob(e.target.files?.[0] || null)} style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', zIndex: 10 }} />
+              <input type="file" accept="audio/*,video/*" onChange={(e) => setUploadedBlob(e.target.files?.[0] || null)} style={{ position: 'absolute', inset: 0, opacity: 0, zIndex: 10, cursor: 'pointer' }} />
             )}
             <UploadIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
             <Typography variant="h6" fontWeight="900" gutterBottom>{uploadedBlob ? uploadedBlob.name : 'Media Evidence'}</Typography>
@@ -241,7 +245,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
               </Grid>
               <Grid item>
                 <Stack direction="row" spacing={1}>
-                  <Tooltip title="Save to Secure Vault">
+                  <Tooltip title="Save Archive">
                     <Button 
                       variant="contained" color="success" onClick={handleSaveToArchive} 
                       disabled={!transcript || saving}
@@ -251,10 +255,10 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
                     </Button>
                   </Tooltip>
                   <Divider orientation="vertical" flexItem />
-                  <Tooltip title="Export to Word Document">
+                  <Tooltip title="Word Export">
                     <Button 
                       variant="contained" color="primary" 
-                      onClick={() => exportToDoc(transcript, caseTitle || 'JudicialTranscript')} 
+                      onClick={() => exportToDoc(transcript, caseTitle || 'Transcript')} 
                       disabled={!transcript}
                       startIcon={<DocIcon />}
                     >
@@ -270,7 +274,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
                 <CircularProgress color="secondary" size={60} />
                 <Box sx={{ width: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="h6" fontWeight="900" color="secondary.main">CONVERTING AUDIO...</Typography>
+                    <Typography variant="h6" fontWeight="900" color="secondary.main">CONVERTING...</Typography>
                     <Typography variant="h6" fontWeight="900" color="secondary.main">{Math.round(progress)}%</Typography>
                   </Box>
                   <LinearProgress variant="determinate" value={progress} sx={{ height: 10, borderRadius: 5 }} color="secondary" />
@@ -279,7 +283,7 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
             ) : (
               <TextField 
                 fullWidth multiline minRows={18} variant="outlined" value={transcript} onChange={(e) => setTranscript(e.target.value)}
-                InputProps={{ sx: { bgcolor: '#fafafa', fontFamily: '"Courier New", monospace', fontSize: '1rem', lineHeight: 2.2 } }} 
+                InputProps={{ sx: { bgcolor: '#fafafa', fontFamily: '"Courier New", monospace', fontSize: '1rem', lineHeight: 1.1, padding: '10px' } }} 
               />
             )}
           </Paper>

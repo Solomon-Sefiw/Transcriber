@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { AppBar, Toolbar, Box, Typography, Tabs, Tab, useMediaQuery, useTheme, IconButton, Tooltip, Avatar, Chip } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { AppBar, Toolbar, Box, Typography, Tabs, Tab, useMediaQuery, useTheme, IconButton, Tooltip, Chip, FormControl, Select, MenuItem, InputLabel } from '@mui/material';
 import { 
   Gavel as GavelIcon, 
   MenuBook as BookIcon, 
@@ -8,20 +8,42 @@ import {
   SupportAgent as AgentIcon,
   Logout as LogoutIcon,
   Inventory as ArchiveIcon,
-  Person as UserIcon
+  Sensors as OnlineIcon
 } from '@mui/icons-material';
 import { AppTab, User } from '../types';
+import { getExhaustedNodes } from '../services/geminiService';
 
 interface HeaderProps {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
   user: User;
   onLogout: () => void;
+  selectedNode: number;
+  onNodeChange: (node: number) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, user, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, user, onLogout, selectedNode, onNodeChange }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [exhausted, setExhausted] = useState<number[]>([]);
+
+  useEffect(() => {
+    const refreshStatus = () => setExhausted(getExhaustedNodes());
+    refreshStatus();
+    
+    // Listen for both manual and automatic node changes
+    const handleStatusUpdate = () => refreshStatus();
+    window.addEventListener('node-status-changed', handleStatusUpdate);
+    window.addEventListener('node-switched', ((e: CustomEvent) => {
+      onNodeChange(e.detail.node);
+    }) as EventListener);
+
+    const interval = setInterval(refreshStatus, 30000); // Check for cooldown resets every 30s
+    return () => {
+      window.removeEventListener('node-status-changed', handleStatusUpdate);
+      clearInterval(interval);
+    };
+  }, [onNodeChange]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: AppTab) => {
     setActiveTab(newValue);
@@ -84,6 +106,39 @@ const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab, user, onLogout
         </Tabs>
 
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {!isMobile && (
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel sx={{ color: 'secondary.main', fontWeight: 900, fontSize: '0.65rem' }}>AI NODE</InputLabel>
+              <Select
+                value={selectedNode}
+                label="AI NODE"
+                onChange={(e) => onNodeChange(e.target.value as number)}
+                sx={{ 
+                  color: 'white', 
+                  height: 38,
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  '.MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.2)' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'secondary.main' },
+                  '.MuiSvgIcon-root': { color: 'secondary.main' },
+                  fontSize: '0.75rem',
+                  fontWeight: 900
+                }}
+              >
+                {[...Array(10)].map((_, i) => {
+                  const nodeNum = i + 1;
+                  const isExhausted = exhausted.includes(nodeNum);
+                  // Only show nodes that are NOT exhausted
+                  if (isExhausted) return null;
+                  
+                  return (
+                    <MenuItem key={nodeNum} value={nodeNum} sx={{ fontWeight: 800, fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                      Server {nodeNum} <OnlineIcon sx={{ fontSize: 12, ml: 1, color: 'success.main' }} />
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+          )}
           <Box sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
             <Typography variant="body2" fontWeight="900" color="white">{user.name}</Typography>
             <Chip label={user.role} size="small" sx={{ height: 18, fontSize: '0.6rem', bgcolor: 'secondary.main', fontWeight: 900, color: 'primary.main' }} />

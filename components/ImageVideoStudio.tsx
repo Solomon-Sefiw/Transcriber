@@ -35,6 +35,15 @@ const ImageVideoStudio: React.FC = () => {
   const handleAction = async () => {
     if (!media || !rawFile || !prompt) return;
     
+    // Mandatory API Key Selection check for Veo models as per guidelines
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await window.aistudio.openSelectKey();
+        // Proceeding immediately after openSelectKey to mitigate race conditions as per guidelines
+      }
+    }
+
     const confirm = window.confirm("WARNING: Video generation uses a significant amount of your daily API quota. Continue?");
     if (!confirm) return;
 
@@ -46,6 +55,10 @@ const ImageVideoStudio: React.FC = () => {
       const videoUrl = await generateVeoVideo(base64Data, mimeType, prompt);
       setResult({ type: 'video', url: videoUrl });
     } catch (e: any) {
+      // Handle "Requested entity was not found" error by prompting for key selection again
+      if (e.message && e.message.includes("Requested entity was not found")) {
+        if (window.aistudio) await window.aistudio.openSelectKey();
+      }
       alert("Quota or API Error: " + e.message);
     } finally {
       setLoading(false);

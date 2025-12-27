@@ -61,11 +61,21 @@ const theme = createTheme({
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('transcription');
+  const [selectedNode, setSelectedNode] = useState<number>(1);
 
   // Load user session
   useEffect(() => {
     const saved = localStorage.getItem('court_session');
     if (saved) setCurrentUser(JSON.parse(saved));
+    const savedNode = localStorage.getItem('active_ai_node');
+    if (savedNode) setSelectedNode(parseInt(savedNode));
+
+    // Listener for automatic failover node switching
+    const handleAutoSwitch = (e: any) => {
+      setSelectedNode(e.detail.node);
+    };
+    window.addEventListener('node-switched', handleAutoSwitch as EventListener);
+    return () => window.removeEventListener('node-switched', handleAutoSwitch as EventListener);
   }, []);
 
   const handleLogin = (user: User) => {
@@ -76,6 +86,11 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('court_session');
+  };
+
+  const handleNodeChange = (node: number) => {
+    setSelectedNode(node);
+    localStorage.setItem('active_ai_node', node.toString());
   };
 
   if (!currentUser) {
@@ -102,7 +117,14 @@ const App: React.FC = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <Header activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} />
+        <Header 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          user={currentUser} 
+          onLogout={handleLogout} 
+          selectedNode={selectedNode}
+          onNodeChange={handleNodeChange}
+        />
         
         <Container maxWidth="lg" sx={{ py: 8, flexGrow: 1 }}>
           <Box sx={{ mb: 8 }}>
@@ -113,6 +135,10 @@ const App: React.FC = () => {
               <Box sx={{ width: 6, height: 6, bgcolor: 'secondary.main', borderRadius: '50%' }} />
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900, letterSpacing: 1 }}>
                 ID: {currentUser.id}
+              </Typography>
+              <Box sx={{ width: 6, height: 6, bgcolor: 'secondary.main', borderRadius: '50%' }} />
+              <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 900 }}>
+                ACTIVE NODE: SERVER {selectedNode}
               </Typography>
             </Box>
             
