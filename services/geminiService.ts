@@ -10,23 +10,28 @@ export const delay = (ms: number) => {
 const EXHAUSTION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Sanitizes keys from process.env (removes quotes/spaces)
+ * Gets the API key for a specific node, handling formatting and sanitization.
  */
 const getSanitizedKey = (node: number): string | undefined => {
   const keyName = `GEMINI_API_KEY_${node}`;
-  // @ts-ignore
+  // @ts-ignore - access process.env dynamically
   let rawKey = process.env[keyName];
   
-  // Fallback to default API_KEY for node 1 if specific key is missing
-  if (!rawKey && node === 1) rawKey = process.env.API_KEY;
+  // Node 1 fallback to the main API_KEY if specific key is missing
+  if (!rawKey && node === 1) {
+    rawKey = process.env.API_KEY;
+  }
   
-  if (typeof rawKey === 'string') {
-    // Remove quotes and leading/trailing whitespace
+  if (typeof rawKey === 'string' && rawKey.length > 5) {
+    // Cleanup any accidental quotes or spaces from .env.local
     return rawKey.replace(/['"]+/g, '').trim();
   }
-  return rawKey;
+  return undefined;
 };
 
+/**
+ * Returns true if a node has a valid key assigned.
+ */
 export const isNodeConfigured = (node: number): boolean => {
   return !!getSanitizedKey(node);
 };
@@ -55,17 +60,19 @@ const markNodeExhausted = (node: number) => {
 
 /**
  * SMART FAILOVER TRANSCRIPTION
- * Automatically rotates through 10 keys if one fails with 429.
+ * Automatically rotates through nodes 1-10 if a quota limit is reached.
  */
 export async function transcribeFullAudio(
   base64Data: string, 
   mimeType: string
 ): Promise<TranscriptionResponse> {
   const startNode = parseInt(localStorage.getItem('active_ai_node') || '1');
-  
+  let lastErrorMessage = "";
+
   for (let i = 0; i < 10; i++) {
     const currentNode = ((startNode + i - 1) % 10) + 1;
     
+    // Check if this node is available
     if (!isNodeConfigured(currentNode)) continue;
     if (getExhaustedNodes().includes(currentNode) && i < 9) continue;
 
@@ -75,7 +82,7 @@ export async function transcribeFullAudio(
     const ai = new GoogleGenAI({ apiKey });
     
     try {
-      // Notify UI which node is currently being attempted
+      // Update UI for the node being attempted
       localStorage.setItem('active_ai_node', currentNode.toString());
       window.dispatchEvent(new CustomEvent('node-switched', { detail: { node: currentNode } }));
 
@@ -84,38 +91,40 @@ export async function transcribeFullAudio(
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType } },
-            { text: `Act as Waghimra HighCourt Stenographer. Verbatim transcript.
-                     RULES:
-                     1. Plain text ONLY.
-                     2. ZERO SPACING. No empty lines.
-                     3. Format: "SPEAKER:Text" (e.g. JUDGE:የቀረበው ማስረጃ..., ጠያቂ:አዎ...)` }
+            { text: `Act as Waghimra HighCourt Stenographer. Verbatim transcript with speaker labels.
+                     STRICT RULES:
+                     1. Plain text ONLY. No Markdown.
+                     2. ZERO SPACING: Every line must follow the previous one immediately.
+                     3. No empty lines. One turn per line.
+                     4. Format: "SPEAKER:Text" (e.g., JUDGE:የቀረበው ማስረጃ..., ጠያቂ:አዎ...).` }
           ]
         },
         config: { temperature: 0.1 }
       });
 
-      if (!response.text) throw new Error("Empty AI response");
+      if (!response.text) throw new Error("Empty response from AI engine.");
 
       return {
         transcript: response.text.trim(),
         language: "Amharic/Auto"
       };
     } catch (error: any) {
-      console.warn(`Node ${currentNode} failed:`, error.message);
+      lastErrorMessage = error.message || "Unknown error";
+      console.warn(`Node ${currentNode} encountered an error:`, lastErrorMessage);
       
-      // If it's a quota or rate limit error, mark and try next
-      if (error?.message?.includes('429') || error?.message?.includes('EXHAUSTED')) {
+      // Automatic failover on quota or generic service busy errors
+      if (lastErrorMessage.includes('429') || lastErrorMessage.includes('RESOURCE_EXHAUSTED')) {
         markNodeExhausted(currentNode);
         continue; 
       }
       
-      // For other serious errors, try one more node before giving up
-      if (i < 2) continue; 
+      // If we still have nodes to try, keep going
+      if (i < 9) continue;
       
       throw error;
     }
   }
-  throw new Error("All configured HighCourt AI Nodes are currently busy. Please try another server or wait 5 minutes.");
+  throw new Error(`All 10 Judicial AI Nodes are currently at capacity. Details: ${lastErrorMessage}`);
 }
 
 const getHealthyKey = () => {
