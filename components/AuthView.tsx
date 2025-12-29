@@ -14,12 +14,14 @@ import {
 } from '@mui/icons-material';
 import { User } from '../types';
 import { apiService } from '../services/apiService';
+import { useTranslation } from 'react-i18next';
 
 interface AuthViewProps {
   onLogin: (user: User) => void;
 }
 
 const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -63,9 +65,9 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
           }}>
             <GavelIcon sx={{ fontSize: 40, color: 'primary.main' }} />
           </Box>
-          <Typography variant="h5" fontWeight="900" color="primary.main">JUDICIAL PORTAL</Typography>
+          <Typography variant="h5" fontWeight="900" color="primary.main">{t('login_portal')}</Typography>
           <Typography variant="caption" sx={{ color: 'secondary.dark', fontWeight: 800, letterSpacing: 1.5 }}>
-            WAGHIMRA HIGHCOURT AI SUITE
+            {t('login_subtitle')}
           </Typography>
         </Box>
 
@@ -75,7 +77,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
             
             <TextField
               fullWidth
-              label="Official Email"
+              label={t('official_email')}
               variant="outlined"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -91,7 +93,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
 
             <TextField
               fullWidth
-              label="Security Password"
+              label={t('security_password')}
               type={showPassword ? 'text' : 'password'}
               variant="outlined"
               value={password}
@@ -121,7 +123,7 @@ const AuthView: React.FC<AuthViewProps> = ({ onLogin }) => {
               disabled={loading}
               sx={{ py: 2, borderRadius: 3, bgcolor: 'primary.main', fontWeight: 900 }}
             >
-              {loading ? 'AUTHENTICATING...' : 'SECURE LOGIN'}
+              {loading ? 'AUTHENTICATING...' : t('secure_login')}
             </Button>
           </Stack>
         </form>

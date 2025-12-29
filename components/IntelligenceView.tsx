@@ -12,7 +12,7 @@ import {
   Link as LinkIcon,
   Balance as BalanceIcon
 } from '@mui/icons-material';
-import { queryIntelligence, fastChat } from '../services/geminiService';
+import { queryIntelligence } from '../services/geminiService';
 
 const IntelligenceView: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -20,26 +20,23 @@ const IntelligenceView: React.FC = () => {
   const [result, setResult] = useState<{ text: string, grounding: any[] } | null>(null);
   const [mode, setMode] = useState<'search' | 'maps' | 'deep' | 'fast'>('search');
 
+  // FIX: Unified query handler using queryIntelligence for all modes, including 'fast'
   const handleQuery = async () => {
     if (!query.trim()) return;
     setLoading(true);
     setResult(null);
     try {
-      if (mode === 'fast') {
-        const text = await fastChat(query);
-        setResult({ text, grounding: [] });
-      } else {
-        let loc;
-        if (mode === 'maps') {
-          try {
-            const pos = await new Promise<GeolocationPosition>((res, rej) => 
-              navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
-            loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          } catch(e) { console.warn("Location blocked."); }
-        }
-        const data = await queryIntelligence(query, mode, loc);
-        setResult(data);
+      let loc;
+      if (mode === 'maps') {
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) => 
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000 }));
+          loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        } catch(e) { console.warn("Location blocked."); }
       }
+      // Mode 'fast' is now handled natively by queryIntelligence
+      const data = await queryIntelligence(query, mode, loc);
+      setResult(data);
     } catch (e: any) {
       setResult({ text: "API Quota Limit reached for complex queries. Please try 'Rapid Consult' or wait 60s.", grounding: [] });
     } finally {
@@ -93,6 +90,31 @@ const IntelligenceView: React.FC = () => {
           <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: '1.1rem', color: 'primary.dark' }}>
             {result.text}
           </Typography>
+          
+          {/* FIX: Extract and display grounding URLs from groundingChunks as per guidelines */}
+          {result.grounding && result.grounding.length > 0 && (
+            <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 900 }}>Sources & Grounding:</Typography>
+              <Stack spacing={1}>
+                {result.grounding.map((chunk: any, i: number) => {
+                  const source = chunk.web || chunk.maps;
+                  if (!source) return null;
+                  return (
+                    <Link 
+                      key={i} 
+                      href={source.uri} 
+                      target="_blank" 
+                      rel="noopener" 
+                      sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.85rem', fontWeight: 700 }}
+                    >
+                      <LinkIcon sx={{ fontSize: 16 }} />
+                      {source.title || source.uri}
+                    </Link>
+                  );
+                })}
+              </Stack>
+            </Box>
+          )}
         </Paper>
       )}
     </Stack>

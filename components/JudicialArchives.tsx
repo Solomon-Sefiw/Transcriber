@@ -114,14 +114,16 @@ const JudicialArchives: React.FC<ArchivesProps> = ({ user }) => {
                 </TableCell>
                 <TableCell align="right">
                   <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Tooltip title="View Plain Text">
+                    {/* Fix: Explicitly pass children prop to Tooltip to resolve compilation error */}
+                    <Tooltip title="View Plain Text" children={
                       <IconButton size="small" color="primary"><ViewIcon /></IconButton>
-                    </Tooltip>
-                    <Tooltip title="Export DOC">
+                    } />
+                    {/* Fix: Explicitly pass children prop to Tooltip to resolve compilation error */}
+                    <Tooltip title="Export DOC" children={
                       <IconButton color="primary" size="small" onClick={() => exportToDoc(record.transcript, record.title)}>
                         <DocIcon />
                       </IconButton>
-                    </Tooltip>
+                    } />
                   </Stack>
                 </TableCell>
               </TableRow>

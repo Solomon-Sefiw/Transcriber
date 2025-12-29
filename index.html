@@ -6,15 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HighCourt AI | Waghimra Nationality Administration</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Ethiopic:wght@100..900&display=swap" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons" />
     <style>
         body {
             margin: 0;
             padding: 0;
             background-color: #f4f7f9;
-            font-family: 'Roboto', sans-serif;
+            font-family: 'Noto Sans Ethiopic', 'Roboto', sans-serif;
         }
-        /* Custom scrollbar for judicial look */
         ::-webkit-scrollbar {
             width: 8px;
         }
@@ -29,6 +29,13 @@
             background: #c5a059;
         }
     </style>
+    
+    <script>
+      window.COURT_CONFIG = {
+        API_KEYS: ""
+      };
+    </script>
+
 <script type="importmap">
 {
   "imports": {
@@ -44,7 +51,14 @@
     "@mui/icons-material": "https://esm.sh/@mui/icons-material@^6.1.1",
     "@mui/icons-material/": "https://esm.sh/@mui/icons-material@^6.1.1/",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/"
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "i18next": "https://esm.sh/i18next@^23.10.0",
+    "react-i18next": "https://esm.sh/react-i18next@^14.1.0",
+    "i18next-browser-languagedetector": "https://esm.sh/i18next-browser-languagedetector@^7.2.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "path": "https://esm.sh/path@^0.12.7",
+    "url": "https://esm.sh/url@^0.11.4"
   }
 }
 </script>

@@ -10,6 +10,7 @@ import LiveAssistant from './components/LiveAssistant';
 import AuthView from './components/AuthView';
 import JudicialArchives from './components/JudicialArchives';
 import { AppTab, User } from './types';
+import { useTranslation } from 'react-i18next';
 
 const theme = createTheme({
   palette: {
@@ -37,7 +38,7 @@ const theme = createTheme({
     }
   },
   typography: {
-    fontFamily: '"Roboto", "Inter", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Noto Sans Ethiopic", "Roboto", "Inter", "Helvetica", "Arial", sans-serif',
     h2: {
       fontWeight: 900,
       letterSpacing: '-0.03em',
@@ -59,23 +60,13 @@ const theme = createTheme({
 });
 
 const App: React.FC = () => {
+  const { t } = useTranslation();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>('transcription');
-  const [selectedNode, setSelectedNode] = useState<number>(1);
 
-  // Load user session
   useEffect(() => {
     const saved = localStorage.getItem('court_session');
     if (saved) setCurrentUser(JSON.parse(saved));
-    const savedNode = localStorage.getItem('active_ai_node');
-    if (savedNode) setSelectedNode(parseInt(savedNode));
-
-    // Listener for automatic failover node switching
-    const handleAutoSwitch = (e: any) => {
-      setSelectedNode(e.detail.node);
-    };
-    window.addEventListener('node-switched', handleAutoSwitch as EventListener);
-    return () => window.removeEventListener('node-switched', handleAutoSwitch as EventListener);
   }, []);
 
   const handleLogin = (user: User) => {
@@ -86,11 +77,6 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('court_session');
-  };
-
-  const handleNodeChange = (node: number) => {
-    setSelectedNode(node);
-    localStorage.setItem('active_ai_node', node.toString());
   };
 
   if (!currentUser) {
@@ -104,11 +90,11 @@ const App: React.FC = () => {
 
   const getTitle = () => {
     switch (activeTab) {
-      case 'transcription': return 'Judicial Record Transcription';
-      case 'archives': return 'My Judicial Archives';
-      case 'intelligence': return 'Legal Intelligence Node';
-      case 'studio': return 'Evidence Analysis Studio';
-      case 'live': return 'Real-time Courtroom Voice';
+      case 'transcription': return t('transcribe_title');
+      case 'archives': return t('nav_archives');
+      case 'intelligence': return t('nav_intelligence');
+      case 'studio': return t('nav_studio');
+      case 'live': return t('nav_live');
       default: return '';
     }
   };
@@ -122,15 +108,13 @@ const App: React.FC = () => {
           setActiveTab={setActiveTab} 
           user={currentUser} 
           onLogout={handleLogout} 
-          selectedNode={selectedNode}
-          onNodeChange={handleNodeChange}
         />
         
         <Container maxWidth="lg" sx={{ py: 8, flexGrow: 1 }}>
           <Box sx={{ mb: 8 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
               <Typography variant="overline" sx={{ bgcolor: 'secondary.main', color: 'primary.main', px: 2, py: 0.6, borderRadius: 1 }}>
-                AUTHENTICATED SESSION: {currentUser.role.toUpperCase()}
+                {t('authenticated_session')}: {currentUser.role.toUpperCase()}
               </Typography>
               <Box sx={{ width: 6, height: 6, bgcolor: 'secondary.main', borderRadius: '50%' }} />
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 900, letterSpacing: 1 }}>
@@ -138,7 +122,7 @@ const App: React.FC = () => {
               </Typography>
               <Box sx={{ width: 6, height: 6, bgcolor: 'secondary.main', borderRadius: '50%' }} />
               <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 900 }}>
-                ACTIVE NODE: SERVER {selectedNode}
+                {t('ai_engine_active')}
               </Typography>
             </Box>
             
@@ -147,7 +131,7 @@ const App: React.FC = () => {
             </Typography>
           </Box>
 
-          <Fade in={true} timeout={800}>
+          <Fade in={true} timeout={800} children={
             <Box>
               {activeTab === 'transcription' && <TranscriptionView user={currentUser} />}
               {activeTab === 'archives' && <JudicialArchives user={currentUser} />}
@@ -155,7 +139,7 @@ const App: React.FC = () => {
               {activeTab === 'studio' && <ImageVideoStudio />}
               {activeTab === 'live' && <LiveAssistant />}
             </Box>
-          </Fade>
+          } />
         </Container>
 
         <Footer />

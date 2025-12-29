@@ -2,179 +2,174 @@
 import { GoogleGenAI } from "@google/genai";
 import { TranscriptionResponse } from "../types";
 
-export const delay = (ms: number) => {
-  const jitter = Math.random() * 500;
-  return new Promise(res => setTimeout(res, ms + jitter));
-};
-
-const EXHAUSTION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+// State to track exhausted or invalid keys
+const exhaustedKeys: Record<number, number> = {};
+const COOLDOWN_PERIOD = 10 * 60 * 1000;
 
 /**
- * Gets the API key for a specific node, handling formatting and sanitization.
+ * PRODUCTION KEY RESOLVER:
+ * Checks process.env (Build time) and window.COURT_CONFIG (IIS Runtime)
  */
-const getSanitizedKey = (node: number): string | undefined => {
-  const keyName = `GEMINI_API_KEY_${node}`;
-  // @ts-ignore - access process.env dynamically
-  let rawKey = process.env[keyName];
+const getKeyPool = (): string[] => {
+  const env = (process.env as any) || {};
+  const win = (window as any).COURT_CONFIG || {};
   
-  // Node 1 fallback to the main API_KEY if specific key is missing
-  if (!rawKey && node === 1) {
-    rawKey = process.env.API_KEY;
-  }
+  // Combine all possible sources
+  const raw = env.API_KEY || env.GEMINI_API_KEY || win.API_KEYS || "";
   
-  if (typeof rawKey === 'string' && rawKey.length > 5) {
-    // Cleanup any accidental quotes or spaces from .env.local
-    return rawKey.replace(/['"]+/g, '').trim();
-  }
-  return undefined;
+  if (!raw) return [];
+  
+  return raw.split(",")
+    .map((k: string) => k.trim())
+    .filter((k: string) => k.length > 10);
+};
+
+export const getClusterStatus = () => {
+  const pool = getKeyPool();
+  const now = Date.now();
+  return pool.map((_, index) => ({
+    index,
+    isExhausted: !!exhaustedKeys[index] && (now - exhaustedKeys[index] < COOLDOWN_PERIOD),
+    configured: true
+  }));
 };
 
 /**
- * Returns true if a node has a valid key assigned.
- */
-export const isNodeConfigured = (node: number): boolean => {
-  return !!getSanitizedKey(node);
-};
-
-export const getExhaustedNodes = (): number[] => {
-  const data = localStorage.getItem('exhausted_nodes');
-  if (!data) return [];
-  try {
-    const nodes: Record<string, number> = JSON.parse(data);
-    const now = Date.now();
-    return Object.entries(nodes)
-      .filter(([_, expiry]) => expiry > now)
-      .map(([node, _]) => parseInt(node));
-  } catch {
-    return [];
-  }
-};
-
-const markNodeExhausted = (node: number) => {
-  const data = localStorage.getItem('exhausted_nodes');
-  const nodes: Record<string, number> = data ? JSON.parse(data) : {};
-  nodes[node.toString()] = Date.now() + EXHAUSTION_TIMEOUT;
-  localStorage.setItem('exhausted_nodes', JSON.stringify(nodes));
-  window.dispatchEvent(new CustomEvent('node-status-changed'));
-};
-
-/**
- * SMART FAILOVER TRANSCRIPTION
- * Automatically rotates through nodes 1-10 if a quota limit is reached.
+ * DYNAMIC SUBJECT DETECTION TRANSCRIPTION
  */
 export async function transcribeFullAudio(
   base64Data: string, 
   mimeType: string
 ): Promise<TranscriptionResponse> {
-  const startNode = parseInt(localStorage.getItem('active_ai_node') || '1');
-  let lastErrorMessage = "";
+  const pool = getKeyPool();
+  
+  if (pool.length === 0 && !process.env.API_KEY) {
+    throw new Error("DEPLOYMENT ERROR: No API Keys found in Environment or window.COURT_CONFIG. Check your IIS configuration.");
+  }
 
-  for (let i = 0; i < 10; i++) {
-    const currentNode = ((startNode + i - 1) % 10) + 1;
-    
-    // Check if this node is available
-    if (!isNodeConfigured(currentNode)) continue;
-    if (getExhaustedNodes().includes(currentNode) && i < 9) continue;
+  // Use the provided pool or fallback to the mandatory process.env.API_KEY
+  const effectivePool = pool.length > 0 ? pool : [process.env.API_KEY || ""];
 
-    const apiKey = getSanitizedKey(currentNode);
-    if (!apiKey) continue;
+  for (let i = 0; i < effectivePool.length; i++) {
+    const now = Date.now();
+    if (exhaustedKeys[i] && (now - exhaustedKeys[i] < COOLDOWN_PERIOD)) continue;
 
-    const ai = new GoogleGenAI({ apiKey });
-    
     try {
-      // Update UI for the node being attempted
-      localStorage.setItem('active_ai_node', currentNode.toString());
-      window.dispatchEvent(new CustomEvent('node-switched', { detail: { node: currentNode } }));
-
+      window.dispatchEvent(new CustomEvent('node-active', { detail: { index: i } }));
+      
+      const ai = new GoogleGenAI({ apiKey: effectivePool[i] });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType } },
-            { text: `Act as Waghimra HighCourt Stenographer. Verbatim transcript with speaker labels.
-                     STRICT RULES:
-                     1. Plain text ONLY. No Markdown.
-                     2. ZERO SPACING: Every line must follow the previous one immediately.
-                     3. No empty lines. One turn per line.
-                     4. Format: "SPEAKER:Text" (e.g., JUDGE:የቀረበው ማስረጃ..., ጠያቂ:አዎ...).` }
+            { 
+              text: `Act as a professional Ethiopian Government Stenographer.
+                     
+                     TASK: Transcribe the audio verbatim.
+                     
+                     STRICT SUBJECT DETECTION RULES:
+                     1. DO NOT use pre-defined roles (like Clerk or Judge) unless the speaker specifically identifies as one or acts exactly like one.
+                     2. ANALYZE the speech content to find the SUBJECT identity.
+                     3. Example: If the person is reporting news or saying "this is the news", label as "ጋዜጠኛ:".
+                     4. Example: If the person says "I am the defendant", label as "ተከሳሽ:".
+                     5. Example: If the person is giving an official statement as a leader, use their specific title (e.g., "ጠቅላይ ሚኒስትር:").
+                     6. If the identity is completely unknown, use "ተናጋሪ:".
+                     
+                     FORMAT:
+                     - Use Amharic Speaker Tags ONLY (e.g., ጋዜጠኛ:, ምስክር:, ተከሳሽ:).
+                     - No markdown (* or #).
+                     - Format: [SUBJECT]: [CONTENT]` 
+            }
           ]
         },
-        config: { temperature: 0.1 }
+        config: { 
+          temperature: 0.1,
+          topP: 0.95
+        }
       });
 
-      if (!response.text) throw new Error("Empty response from AI engine.");
+      if (!response.text) throw new Error("Empty AI response.");
 
       return {
         transcript: response.text.trim(),
-        language: "Amharic/Auto"
+        language: "Amharic/English"
       };
+
     } catch (error: any) {
-      lastErrorMessage = error.message || "Unknown error";
-      console.warn(`Node ${currentNode} encountered an error:`, lastErrorMessage);
-      
-      // Automatic failover on quota or generic service busy errors
-      if (lastErrorMessage.includes('429') || lastErrorMessage.includes('RESOURCE_EXHAUSTED')) {
-        markNodeExhausted(currentNode);
-        continue; 
+      const msg = error.message || "";
+      if (msg.includes('429') || msg.includes('quota') || msg.includes('400')) {
+        exhaustedKeys[i] = Date.now();
+        window.dispatchEvent(new CustomEvent('node-exhausted', { detail: { index: i } }));
+        if (i < effectivePool.length - 1) continue;
       }
-      
-      // If we still have nodes to try, keep going
-      if (i < 9) continue;
-      
-      throw error;
+      throw new Error(`AI Node ${i + 1} Error: ${msg}`);
     }
   }
-  throw new Error(`All 10 Judicial AI Nodes are currently at capacity. Details: ${lastErrorMessage}`);
+  throw new Error(`All available AI nodes are currently busy or unconfigured.`);
 }
 
-const getHealthyKey = () => {
-  const node = parseInt(localStorage.getItem('active_ai_node') || '1');
-  return getSanitizedKey(node) || getSanitizedKey(1) || "";
-};
+export async function queryIntelligence(query: string, mode: 'search' | 'maps' | 'deep' | 'fast', location?: { lat: number; lng: number }) {
+  // Fresh GoogleGenAI instance for the request
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || getKeyPool()[0] || "" });
+  
+  // Model selection based on task type as per guidelines
+  let model = 'gemini-3-flash-preview'; 
+  if (mode === 'deep') model = 'gemini-3-pro-preview';
+  if (mode === 'maps') model = 'gemini-2.5-flash'; // Maps grounding requires 2.5 series
 
-export async function analyzeJudicialHearing(transcript: string) {
-  const ai = new GoogleGenAI({ apiKey: getHealthyKey() });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Summarize for judicial record:\n${transcript}`,
-  });
-  return response.text || "Summary failed.";
-}
+  const config: any = { 
+    systemInstruction: "Waghimra HighCourt Intelligence Unit. You are a senior legal researcher providing analysis and insights." 
+  };
 
-export async function queryIntelligence(query: string, mode: 'search' | 'maps' | 'deep' | 'fast', location?: { lat: number, lng: number }) {
-  const ai = new GoogleGenAI({ apiKey: getHealthyKey() });
-  let model = 'gemini-3-flash-preview';
-  let config: any = { systemInstruction: "Waghimra Judicial Assistant." };
-  if (mode === 'search') config.tools = [{ googleSearch: {} }];
-  else if (mode === 'maps') {
-    model = 'gemini-2.5-flash';
+  if (mode === 'search') {
+    config.tools = [{ googleSearch: {} }];
+  } else if (mode === 'maps') {
     config.tools = [{ googleMaps: {} }];
-  } else if (mode === 'deep') model = 'gemini-3-pro-preview';
+    if (location) {
+      config.toolConfig = {
+        retrievalConfig: {
+          latLng: {
+            latitude: location.lat,
+            longitude: location.lng
+          }
+        }
+      };
+    }
+  }
 
   const response = await ai.models.generateContent({ model, contents: query, config });
-  return { text: response.text, grounding: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
-}
-
-export async function fastChat(message: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: getHealthyKey() });
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: message
-  });
-  return response.text || "";
+  
+  return { 
+    text: response.text || "", 
+    grounding: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] 
+  };
 }
 
 export async function generateVeoVideo(base64Data: string, mimeType: string, prompt: string): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: getHealthyKey() });
+  // Use a fresh GoogleGenAI instance for Veo generation with process.env.API_KEY
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   let operation = await ai.models.generateVideos({
     model: 'veo-3.1-fast-generate-preview',
     prompt,
-    image: { imageBytes: base64Data, mimeType },
-    config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
+    image: { 
+      imageBytes: base64Data, 
+      mimeType 
+    },
+    config: { 
+      numberOfVideos: 1, 
+      resolution: '720p', 
+      aspectRatio: '16:9' 
+    }
   });
+
   while (!operation.done) {
-    await delay(10000);
+    await new Promise(res => setTimeout(res, 10000));
     operation = await ai.operations.getVideosOperation({ operation });
   }
-  return `${operation.response?.generatedVideos?.[0]?.video?.uri}&key=${getHealthyKey()}`;
+
+  const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+  // Always append the API key when fetching MP4 bytes from the download link
+  return `${downloadLink}&key=${process.env.API_KEY}`;
 }

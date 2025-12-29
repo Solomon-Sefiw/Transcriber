@@ -2,40 +2,44 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, Paper, Typography, Button, Grid, TextField, 
-  CircularProgress, Stack, Alert, Fade, 
+  CircularProgress, Stack, Alert, 
   IconButton, Tooltip, Snackbar,
-  LinearProgress, Divider
+  Divider, Collapse, AlertTitle,
+  Backdrop
 } from '@mui/material';
 import { 
   Mic as MicIcon, Stop as StopIcon, CloudUpload as UploadIcon, 
-  Description as DocIcon,
-  Gavel as GavelIcon, Bolt as BoltIcon,
+  Gavel as GavelIcon,
   DeleteSweep as ResetIcon,
   Save as SaveIcon,
-  CheckCircle as CheckIcon,
   Download as DownloadIcon,
-  AudioFile as AudioIcon
+  SwapHoriz as SwitchIcon,
+  Bolt as BoltIcon
 } from '@mui/icons-material';
 import { AppStatus, User } from '../types';
 import { transcribeFullAudio } from '../services/geminiService';
 import { apiService } from '../services/apiService';
 import { exportToDoc } from '../utils/exportUtils';
+import { useTranslation } from 'react-i18next';
 
 interface TranscriptionProps {
   user: User;
 }
 
 const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<AppStatus>(AppStatus.IDLE);
   const [transcript, setTranscript] = useState<string>('');
   const [caseTitle, setCaseTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [failoverMsg, setFailoverMsg] = useState<string | null>(null);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [uploadedBlob, setUploadedBlob] = useState<File | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [saving, setSaving] = useState(false);
+  const [activeNode, setActiveNode] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -44,22 +48,31 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
   useEffect(() => {
     let interval: number;
     if (status === AppStatus.PROCESSING) {
-      interval = window.setInterval(() => setProgress(p => p < 98 ? p + 1 : p), 400);
+      interval = window.setInterval(() => {
+        setProgress(p => {
+          if (p >= 99) return 99;
+          const increment = p < 80 ? 2 : 0.5;
+          return Math.min(p + increment, 99);
+        });
+      }, 300);
+    } else {
+      setProgress(0);
     }
     return () => clearInterval(interval);
   }, [status]);
 
-  const downloadRecording = () => {
-    if (!recordedBlob) return;
-    const url = URL.createObjectURL(recordedBlob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `court_recording_${caseTitle || Date.now()}.webm`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+  useEffect(() => {
+    const handleNode = (e: any) => {
+      setActiveNode(e.detail.index + 1);
+      if (status === AppStatus.PROCESSING && activeNode !== null && (e.detail.index + 1) !== activeNode) {
+        setFailoverMsg(t("failover_msg"));
+        setTimeout(() => setFailoverMsg(null), 5000);
+      }
+    };
+
+    window.addEventListener('node-active', handleNode as EventListener);
+    return () => window.removeEventListener('node-active', handleNode as EventListener);
+  }, [status, activeNode, t]);
 
   const handleTranscribe = async (blob: Blob) => {
     setStatus(AppStatus.PROCESSING);
@@ -74,14 +87,15 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
           const res = await transcribeFullAudio(base64, blob.type);
           setTranscript(res.transcript);
           setStatus(AppStatus.COMPLETED);
-          setSuccess("Transcription finalized successfully.");
+          setSuccess(t("success_msg"));
+          setProgress(100);
         } catch (e: any) {
-          setError(e.message || "Transcription failed.");
+          setError(e.message || t("error_msg"));
           setStatus(AppStatus.ERROR);
         }
       };
-    } catch (e: any) {
-      setError("File processing error.");
+    } catch (e) {
+      setError(t("error_msg"));
       setStatus(AppStatus.ERROR);
     }
   };
@@ -93,15 +107,14 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
       chunksRef.current = [];
       recorder.ondataavailable = (e) => chunksRef.current.push(e.data);
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setRecordedBlob(blob);
+        setRecordedBlob(new Blob(chunksRef.current, { type: 'audio/wav' }));
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setStatus(AppStatus.RECORDING);
       setRecordingTime(0);
       timerRef.current = window.setInterval(() => setRecordingTime(p => p + 1), 1000);
-    } catch (e) { setError("Microphone access denied."); }
+    } catch (e) { setError(t("error_msg")); }
   };
 
   const stopRecording = () => {
@@ -111,106 +124,186 @@ const TranscriptionView: React.FC<TranscriptionProps> = ({ user }) => {
     setStatus(AppStatus.IDLE);
   };
 
+  const downloadAudio = () => {
+    if (!recordedBlob) return;
+    const url = URL.createObjectURL(recordedBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Waghimra_Evidence_${new Date().toISOString()}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleArchive = async () => {
+    if (!caseTitle) {
+      setError(t("case_ref") + " required.");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await apiService.saveRecord(caseTitle, transcript, user);
+      setSuccess(t("save_success"));
+    } catch (e) {
+      setError(t("error_msg"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    if (transcript && !window.confirm(t("discard_confirm"))) return;
+    setTranscript('');
+    setStatus(AppStatus.IDLE);
+    setCaseTitle('');
+    setRecordedBlob(null);
+    setUploadedBlob(null);
+  };
+
+  const renderFormattedTranscript = () => {
+    return transcript.split('\n').map((line, idx) => {
+      const match = line.match(/^([^:]+:)(.*)$/);
+      if (match) {
+        return (
+          <Typography key={idx} sx={{ mb: 1.5, fontFamily: '"Noto Sans Ethiopic", "Nyala", serif', fontSize: '1.05rem', lineHeight: 1.6 }}>
+            <Box component="span" sx={{ fontWeight: 900, color: '#0a3d52' }}>{match[1]}</Box>
+            {match[2]}
+          </Typography>
+        );
+      }
+      return (
+        <Typography key={idx} sx={{ mb: 1, fontFamily: '"Noto Sans Ethiopic", "Nyala", serif', fontSize: '1rem', lineHeight: 1.6 }}>
+          {line}
+        </Typography>
+      );
+    });
+  };
+
   return (
     <Stack spacing={4}>
-      <Paper elevation={0} sx={{ p: 4, border: 1, borderColor: status === AppStatus.RECORDING ? 'error.main' : 'divider', borderRadius: 4 }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid item><GavelIcon sx={{ fontSize: 40, color: status === AppStatus.RECORDING ? 'error.main' : 'primary.main' }} /></Grid>
-          <Grid item xs>
-            <Typography variant="overline" color="secondary" fontWeight="900">STENOGRAPHY CONSOLE</Typography>
-            <Typography variant="h5" fontWeight="900" color="primary.main">
-              {status === AppStatus.RECORDING ? `RECORDING: ${recordingTime}s` : 'System Ready'}
-            </Typography>
-          </Grid>
-          <Grid item><Button variant="outlined" startIcon={<ResetIcon />} onClick={() => { setTranscript(''); setStatus(AppStatus.IDLE); setRecordedBlob(null); setUploadedBlob(null); }} sx={{ fontWeight: 900 }}>Reset</Button></Grid>
-        </Grid>
+      {/* PRODUCTION-READY PROGRESS BACKDROP */}
+      <Backdrop 
+        open={status === AppStatus.PROCESSING} 
+        sx={{ zIndex: 1301, color: '#fff', flexDirection: 'column', gap: 3, backdropFilter: 'blur(15px)', bgcolor: 'rgba(10, 61, 82, 0.9)' }}
+      >
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+          <CircularProgress size={160} thickness={2} variant="determinate" value={progress} sx={{ color: '#c5a059' }} />
+          <CircularProgress size={160} thickness={2} variant="determinate" value={100} sx={{ position: 'absolute', left: 0, color: 'rgba(255,255,255,0.1)' }} />
+          <Box sx={{ top: 0, left: 0, bottom: 0, right: 0, position: 'absolute', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Typography variant="h3" fontWeight="900" sx={{ color: 'white' }}>{Math.round(progress)}%</Typography>
+          </Box>
+        </Box>
+        <Box sx={{ textAlign: 'center', maxWidth: 400, px: 4 }}>
+          <Typography variant="h5" fontWeight="900" sx={{ mb: 1, letterSpacing: 1 }}>{t("analyzing_msg").toUpperCase()}</Typography>
+          <Typography variant="body2" sx={{ opacity: 0.8, fontWeight: 700 }}>{t("node_status")} {activeNode || 1} • {t("ai_engine_active")}</Typography>
+        </Box>
+      </Backdrop>
+
+      <Collapse in={!!failoverMsg}>
+        <Alert severity="warning" icon={<SwitchIcon />} sx={{ borderRadius: 3, border: '2px solid', borderColor: 'warning.main' }}>
+          <AlertTitle sx={{ fontWeight: 900 }}>FAILOVER ACTIVATED</AlertTitle>
+          {failoverMsg}
+        </Alert>
+      </Collapse>
+
+      <Paper 
+        variant="outlined" 
+        sx={{ 
+          p: 3, borderRadius: '24px', borderColor: '#0a3d52',
+          bgcolor: 'rgba(10, 61, 82, 0.03)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ bgcolor: '#0a3d52', color: 'white', p: 1.5, borderRadius: 2, display: 'flex' }}><GavelIcon /></Box>
+          <Box>
+            <Typography variant="overline" color="#c5a059" fontWeight="900">{t("federal_ethiopia")}</Typography>
+            <Typography variant="h5" fontWeight="900" color="#0a3d52">{t('nav_transcribe')}</Typography>
+          </Box>
+        </Box>
+        <Button variant="outlined" startIcon={<ResetIcon />} onClick={handleReset} sx={{ borderRadius: 2, fontWeight: 900, color: '#0a3d52', borderColor: '#0a3d52' }}>{t('reset_btn')}</Button>
       </Paper>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={4}>
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 4, textAlign: 'center', border: '2px dashed', borderColor: status === AppStatus.RECORDING ? 'error.main' : 'divider' }}>
-            <MicIcon sx={{ fontSize: 48, mb: 2 }} color={status === AppStatus.RECORDING ? 'error' : 'primary'} />
-            <Button variant="contained" fullWidth color={status === AppStatus.RECORDING ? 'error' : 'primary'} onClick={status === AppStatus.RECORDING ? stopRecording : startRecording} sx={{ fontWeight: 900, py: 1.5 }}>
-              {status === AppStatus.RECORDING ? 'STOP RECORDING' : 'START MIC'}
-            </Button>
-            {recordedBlob && status !== AppStatus.RECORDING && (
-              <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-                <Button fullWidth variant="contained" color="secondary" sx={{ fontWeight: 900 }} onClick={() => handleTranscribe(recordedBlob)}>TRANSCRIBE</Button>
-                <Tooltip title="Download Audio File">
-                  <IconButton color="primary" onClick={downloadRecording} sx={{ border: 1, borderColor: 'divider' }}>
-                    <DownloadIcon />
-                  </IconButton>
-                </Tooltip>
+          <Paper 
+            variant="outlined" 
+            sx={{ 
+              p: 6, textAlign: 'center', borderRadius: '32px', borderStyle: 'dashed',
+              bgcolor: 'white', minHeight: 320, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+              transition: 'all 0.3s ease', '&:hover': { borderColor: '#c5a059', bgcolor: '#fffdf9' }
+            }}
+          >
+            <MicIcon sx={{ fontSize: 50, mb: 1, color: '#0a3d52' }} />
+            <Typography variant="subtitle1" fontWeight="900" sx={{ mb: 4, color: '#0a3d52' }}>{t('live_mic')}</Typography>
+            <Stack spacing={2} sx={{ width: '100%', maxWidth: 300 }}>
+              <Button 
+                variant="contained" fullWidth startIcon={status === AppStatus.RECORDING ? <StopIcon /> : <MicIcon />}
+                onClick={status === AppStatus.RECORDING ? stopRecording : startRecording}
+                sx={{ bgcolor: status === AppStatus.RECORDING ? '#ef3340' : '#0a3d52', fontWeight: 900, py: 1.5, borderRadius: 3 }}
+              >
+                {status === AppStatus.RECORDING ? `${t('stop_rec')} (${recordingTime}s)` : t('start_rec')}
+              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button 
+                  fullWidth variant="contained" startIcon={<BoltIcon />}
+                  disabled={!recordedBlob || status === AppStatus.RECORDING}
+                  onClick={() => recordedBlob && handleTranscribe(recordedBlob)}
+                  sx={{ bgcolor: '#c5a059', fontWeight: 900, borderRadius: 3 }}
+                >
+                  {t('transcribe_btn')}
+                </Button>
+                {recordedBlob && (
+                  <Tooltip title="Save Raw Evidence" children={
+                    <IconButton onClick={downloadAudio} sx={{ border: 1, borderColor: '#eee', borderRadius: 3 }}><DownloadIcon /></IconButton>
+                  } />
+                )}
               </Stack>
-            )}
+            </Stack>
           </Paper>
         </Grid>
+
         <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 4, textAlign: 'center', border: '2px dashed #ccc', position: 'relative' }}>
-            <UploadIcon sx={{ fontSize: 48, mb: 2, color: 'primary.main' }} />
-            <input type="file" accept="audio/*,video/*" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={e => setUploadedBlob(e.target.files?.[0] || null)} />
-            <Typography fontWeight="900" noWrap>{uploadedBlob ? uploadedBlob.name : 'UPLOAD EVIDENCE'}</Typography>
-            {uploadedBlob && <Button fullWidth variant="contained" color="secondary" sx={{ mt: 2, fontWeight: 900, py: 1.5 }} onClick={() => handleTranscribe(uploadedBlob)}>TRANSCRIBE FILE</Button>}
+          <Paper 
+            variant="outlined" 
+            sx={{ 
+              p: 6, textAlign: 'center', borderRadius: '32px', borderStyle: 'dashed',
+              bgcolor: 'white', minHeight: 320, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+              transition: 'all 0.3s ease', '&:hover': { borderColor: '#c5a059', bgcolor: '#fffdf9' }
+            }}
+          >
+            <UploadIcon sx={{ fontSize: 50, mb: 1, color: '#0a3d52' }} />
+            <Typography variant="subtitle1" fontWeight="900" sx={{ mb: 2, color: '#0a3d52' }}>
+              {uploadedBlob ? uploadedBlob.name.toUpperCase() : t('import_file')}
+            </Typography>
+            {uploadedBlob && <Button onClick={() => setUploadedBlob(null)} sx={{ mb: 2, color: '#ef3340', fontWeight: 900 }}>REMOVE FILE</Button>}
+            {!uploadedBlob ? (
+              <Box>
+                <input type="file" style={{ display: 'none' }} id="file-up" onChange={e => setUploadedBlob(e.target.files?.[0] || null)} />
+                <Button component="label" htmlFor="file-up" variant="outlined" sx={{ fontWeight: 900, py: 1.5, px: 6, borderRadius: 3, borderColor: '#0a3d52', color: '#0a3d52' }}>{t('import_file')}</Button>
+              </Box>
+            ) : (
+              <Button fullWidth variant="contained" onClick={() => handleTranscribe(uploadedBlob)} sx={{ maxWidth: 300, bgcolor: '#c5a059', fontWeight: 900, py: 1.5, borderRadius: 3 }}>ANALYZE CONTENT</Button>
+            )}
           </Paper>
         </Grid>
       </Grid>
 
-      {(transcript || status === AppStatus.PROCESSING) && (
-        <Paper sx={{ p: 4, borderRadius: 4, border: 1, borderColor: 'divider' }}>
-          <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
-            <Typography variant="h6" fontWeight="900" sx={{ flexGrow: 1 }}>JUDICIAL RECORD</Typography>
-            <TextField size="small" placeholder="Case Ref..." value={caseTitle} onChange={e => setCaseTitle(e.target.value)} />
-            
-            <Tooltip title="Save to Archives">
-              <span>
-                <Button 
-                  variant="contained" color="success" 
-                  disabled={!transcript || saving} 
-                  startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />} 
-                  onClick={() => apiService.saveRecord(caseTitle, transcript, user)}
-                  sx={{ fontWeight: 900 }}
-                >
-                  ARCHIVE
-                </Button>
-              </span>
-            </Tooltip>
-
-            <Tooltip title="Export Official Word DOC">
-              <span>
-                <Button 
-                  variant="contained" 
-                  disabled={!transcript} 
-                  startIcon={<DocIcon />} 
-                  onClick={() => exportToDoc(transcript, caseTitle || 'Transcript')}
-                  sx={{ fontWeight: 900 }}
-                >
-                  DOC
-                </Button>
-              </span>
-            </Tooltip>
+      {transcript && (
+        <Paper elevation={0} sx={{ p: 4, borderRadius: '32px', border: 1, borderColor: '#eee', bgcolor: 'white' }}>
+          <Stack direction="row" spacing={2} sx={{ mb: 4 }} alignItems="center">
+            <TextField label={t('case_ref')} placeholder="e.g. WAG-CR-2024-91" value={caseTitle} onChange={e => setCaseTitle(e.target.value)} fullWidth sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3 } }} />
+            <Button variant="contained" startIcon={isSaving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />} onClick={handleArchive} disabled={isSaving} sx={{ bgcolor: '#2e7d32', fontWeight: 900, px: 4, height: 56, borderRadius: 3 }}>{t('archive_btn')}</Button>
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => exportToDoc(transcript, caseTitle || 'Court_Record')} sx={{ fontWeight: 900, height: 56, borderRadius: 3, color: '#0a3d52', borderColor: '#0a3d52' }}>DOC</Button>
           </Stack>
-          
-          {status === AppStatus.PROCESSING ? (
-            <Box sx={{ p: 10, textAlign: 'center' }}>
-              <CircularProgress color="secondary" size={60} />
-              <LinearProgress variant="determinate" value={progress} sx={{ mt: 4, height: 8, borderRadius: 4 }} />
-              <Typography sx={{ mt: 3, fontWeight: 900, color: 'secondary.main' }}>
-                JUDICIAL AI IS ANALYZING... 
-                <br/>
-                <Typography variant="caption" sx={{ opacity: 0.7 }}>Checking Node Availability (Failover Enabled)</Typography>
-              </Typography>
-            </Box>
-          ) : (
-            <TextField 
-              fullWidth multiline minRows={20} value={transcript} onChange={e => setTranscript(e.target.value)}
-              InputProps={{ sx: { fontFamily: '"Courier New", monospace', fontSize: '1rem', lineHeight: 1.0, padding: '15px', bgcolor: '#fcfcfc' } }} 
-            />
-          )}
+          <Divider sx={{ mb: 4 }} />
+          <Box sx={{ bgcolor: '#fcfcfc', p: 4, borderRadius: 4, border: '1px inset rgba(0,0,0,0.05)', minHeight: 400 }}>{renderFormattedTranscript()}</Box>
         </Paper>
       )}
 
-      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError(null)}><Alert severity="error" variant="filled" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>{error}</Alert></Snackbar>
-      <Snackbar open={!!success} autoHideDuration={3000} onClose={() => setSuccess(null)}><Alert severity="success" variant="filled" onClose={() => setSuccess(null)} sx={{ borderRadius: 2 }}>{success}</Alert></Snackbar>
+      <Snackbar open={!!error} autoHideDuration={8000} onClose={() => setError(null)}><Alert severity="error" variant="filled">{error}</Alert></Snackbar>
+      <Snackbar open={!!success} autoHideDuration={4000} onClose={() => setSuccess(null)}><Alert severity="success" variant="filled">{success}</Alert></Snackbar>
     </Stack>
   );
 };
